@@ -1,0 +1,9 @@
+topics:
+  market_raw:    {retention: '8h',  ordering: per-partition}
+  market_events: {retention: '24h', keys: 'conid', compaction: true}
+  ofi_events:    {retention: '24h'}
+  order_intents: {retention: '6h',  acks: all}
+  exec_reports:  {retention: '7d'}
+SLA:
+  market_rt_p95_ms: 250
+  hist_bar_max_lag_min: 5

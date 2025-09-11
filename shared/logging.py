@@ -1,0 +1,3 @@
+def init_structured_logger():
+    # אתחול structured logger
+    return lambda msg, **kwargs: ...

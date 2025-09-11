@@ -1,0 +1,3 @@
+def init_metrics_exporter():
+    # אתחול Prometheus/Otel metrics
+    return lambda metric, value: ...
