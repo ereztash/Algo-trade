@@ -1,0 +1,7 @@
+asset_id,ticker,exchange,asset_type,currency,lot_size,min_trade_size,multiplier,isin,figi,data_symbol,tradeable,sector,risk_weight,commission_profile,start_date,active,notes
+EQT-TSLA,TSLA,NASDAQ,equity,USD,1,1,1,US88160R1014,BBG000N9MNX3,TSLA:SMART,true,Consumer,0.9,standard,2010-06-29,true,High volatility; options available
+ETF-SPY,SPY,ARCA,etf,USD,1,1,1,US78462F1030,BBG000BDTBL9,SPY:ARCX,true,ETF,0.5,etf_low,1993-01-29,true,Large cap S&P500 ETF
+FUT-ESM25,ESM25,CME,future,USD,1,1,50,,BBG00Z5GQH66,ESM25:CME,true,Macro,0.8,futures_std,2020-01-01,true,E-mini S&P front month multiplier=50
+FX-EURUSD,EURUSD,IDEALPRO,fx,USD,1000,1000,1,,BBG000D9KQX6,EURUSD:IDEALPRO,true,FX,0.3,fx_spread,2000-01-01,true,Base pair EUR/USD
+CRYPTO-BTC,BTC,COINBASE,crypto,USD,0.0001,0.0001,1,,BBG001S5QF90,BTC:COINBASE,true,Crypto,1.0,crypto_fee,2014-01-01,true,24/7 market; high slippage risk
+BND-TLT,TLT,ARCA,etf,USD,1,1,1,US88164A1097,BBG000BCDG01,TLT:ARCA,true,FixedIncome,0.4,etf_low,2002-07-22,true,Long-term treasury ETF
