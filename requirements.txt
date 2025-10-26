@@ -4,3 +4,7 @@ cvxpy
 pyyaml
 scipy
 scikit-learn
+ib_insync
+pydantic>=2.0.0
+aiokafka
+hmmlearn
