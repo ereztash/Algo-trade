@@ -769,7 +769,11 @@ def bayesian_optimization(returns: pd.DataFrame, n_iter: int) -> Dict:
     for i in range(n_iter):
         candidate_params = best_params.copy()
         for param, [min_val, max_val] in search_space.items():
-            candidate_params[param] = rng.uniform(min_val, max_val)
+            val = rng.uniform(min_val, max_val)
+            # Convert to int for window-size parameters
+            if param in ['MOM_H', 'REV_H', 'VOL_H', 'POS_H', 'TSX_H', 'SIF_H_FAST', 'SIF_H_SLOW']:
+                val = int(val)
+            candidate_params[param] = val
 
         sharpe = evaluate_params(candidate_params, returns)
         history.append((candidate_params, sharpe))
