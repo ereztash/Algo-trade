@@ -1,0 +1,261 @@
+# AlgoX Hybrid MVP Configuration
+# Version: 0.1.0
+# Date: 2025-10-27
+
+# ============================================================================
+# GENERAL SETTINGS
+# ============================================================================
+SEED: 42
+MODE: "backtest"  # Options: backtest, paper, live
+LOG_LEVEL: "INFO"
+
+# ============================================================================
+# CAPITAL & RISK MANAGEMENT
+# ============================================================================
+CAPITAL:
+  INITIAL: 10000.0  # $10K for MVP
+  CURRENCY: "USD"
+
+RISK:
+  MAX_POSITION_SIZE: 0.15        # 15% per position
+  MAX_GROSS_EXPOSURE: 0.50       # 50% total capital
+  MAX_CONCURRENT_POSITIONS: 5
+  MAX_SECTOR_EXPOSURE: 0.30      # 30% per sector
+
+  # Strategy-specific limits
+  BIOTECH_MAX: 0.10              # 10% for event-driven
+  ETF_MAX: 0.15                  # 15% for structural arbitrage
+
+  # Volatility scaling
+  VOL_TARGET: 0.12               # 12% annualized
+  VOL_LOOKBACK: 60               # days
+
+# ============================================================================
+# CIRCUIT BREAKERS / KILL-SWITCHES
+# ============================================================================
+KILL_SWITCHES:
+  MAX_DRAWDOWN: 0.20             # Stop if DD > 20%
+  MIN_SHARPE_RATIO: 0.5          # Stop if SR < 0.5 for 3 months
+  MAX_DAILY_LOSS: 0.03           # Stop if daily loss > 3%
+  PSR_THRESHOLD: 0.2             # Stop if PSR < 0.2
+  MIN_MONTHS_FOR_SR: 3           # Months to evaluate Sharpe
+
+# ============================================================================
+# STRATEGY WEIGHTS (Dynamic via LinUCB)
+# ============================================================================
+STRATEGIES:
+  STRUCTURAL_ARBITRAGE:
+    ENABLED: true
+    WEIGHT: 0.40                 # Initial weight
+    SYMBOLS: ["REMX", "URNM", "QTUM"]
+
+  EVENT_DRIVEN:
+    ENABLED: true
+    WEIGHT: 0.30                 # Initial weight
+    MAX_CONCURRENT: 2
+
+  RICCI_CURVATURE:
+    ENABLED: true
+    WEIGHT: 0.30                 # Used as risk filter
+    UNIVERSE: ["SPY", "QQQ", "IWM", "DIA"]  # Market indices for analysis
+
+# ============================================================================
+# SIGNAL PARAMETERS
+# ============================================================================
+
+# Structural Arbitrage (Lead-Lag)
+STRUCTURAL:
+  GRANGER_LAG: 5                 # Days for Granger causality test
+  GRANGER_PVALUE: 0.05           # Significance threshold
+  LOOKBACK: 252                  # Days for correlation analysis
+  THRESHOLD: 0.02                # 2% move in leader triggers signal
+  HOLD_DAYS: [1, 2, 3]          # Test multiple holding periods
+
+# Event-Driven (FDA)
+EVENT_DRIVEN:
+  ENTRY_DAYS: 5                  # Enter T-5 days before PDUFA
+  EXIT_DAYS: 2                   # Exit T-2 days (avoid binary risk)
+  MIN_PHASE: 3                   # Minimum Phase III
+  MIN_MARKET_CAP: 500000000      # $500M
+  MIN_DAILY_VOLUME: 5000000      # $5M
+  FDA_CALENDAR_URL: "https://www.fda.gov/drugs/development-approval-process-drugs/drug-and-biologic-calendar"
+
+# Ricci Curvature (Early Warning System)
+RICCI:
+  CORRELATION_THRESHOLD: 0.3     # Min correlation for edge
+  LOOKBACK: 60                   # Days for correlation window
+  CURVATURE_THRESHOLD:
+    NEGATIVE: -0.2               # Reduce exposure if avg < -0.2
+    POSITIVE: 0.1                # Increase exposure if avg > 0.1
+  EXPOSURE_SCALING:
+    REDUCE: 0.5                  # 50% reduction
+    INCREASE: 1.2                # 20% increase
+
+# ============================================================================
+# PORTFOLIO OPTIMIZATION
+# ============================================================================
+OPTIMIZATION:
+  METHOD: "QP"                   # Quadratic Programming (from Algo-trade)
+
+  # Objective function
+  TURNOVER_PENALTY: 0.001        # Lower than Algo-trade
+  RIDGE_PENALTY: 0.0001
+
+  # Constraints
+  LONG_ONLY: true
+  GROSS_LIMIT: 0.50              # Match MAX_GROSS_EXPOSURE
+  NET_LIMIT: 0.50
+  BOX_LIMIT: 0.15                # Match MAX_POSITION_SIZE
+
+  # Covariance estimation
+  COV_METHOD: "ledoit_wolf"      # Options: sample, ledoit_wolf, ewma
+  COV_LOOKBACK: 252              # Days
+  EWMA_HALFLIFE: 60              # For EWMA method
+
+# ============================================================================
+# REGIME DETECTION
+# ============================================================================
+REGIME:
+  ENABLED: true
+  METHOD: "volatility"           # Options: volatility, hmm
+  LOOKBACK: 60                   # Days
+
+  # Volatility-based thresholds
+  THRESHOLDS:
+    CALM: 0.15                   # Ann. vol < 15%
+    STORM: 0.35                  # Ann. vol > 35%
+
+  # Regime-specific adjustments
+  ADJUSTMENTS:
+    CALM:
+      GROSS_LIMIT: 0.60
+      POSITION_SIZE: 0.18
+    NORMAL:
+      GROSS_LIMIT: 0.50
+      POSITION_SIZE: 0.15
+    STORM:
+      GROSS_LIMIT: 0.30
+      POSITION_SIZE: 0.10
+
+# ============================================================================
+# WALK-FORWARD OPTIMIZATION (WFO)
+# ============================================================================
+WFO:
+  ENABLED: true
+
+  # Window sizes (in months)
+  TRAIN_WINDOW: 12
+  VALIDATION_WINDOW: 3
+  TEST_WINDOW: 3
+  STEP_SIZE: 3                   # Roll forward by 3 months
+
+  # Hyperparameter search space
+  SEARCH_SPACE:
+    GRANGER_LAG: [3, 5, 7]
+    RICCI_LOOKBACK: [30, 60, 90]
+    TURNOVER_PENALTY: [0.0005, 0.001, 0.002]
+    VOL_TARGET: [0.10, 0.12, 0.15]
+
+  # Optimization method
+  OPTIMIZER: "bayesian"          # Options: grid, random, bayesian
+  N_ITERATIONS: 20               # For Bayesian optimization
+
+  # Success criteria
+  MIN_SHARPE_OOS: 0.5
+  MIN_WFE: 0.60                  # Walk-Forward Efficiency > 60%
+
+# ============================================================================
+# EXECUTION (IBKR)
+# ============================================================================
+EXECUTION:
+  BROKER: "IBKR"
+
+  # Connection
+  HOST: "127.0.0.1"
+  PORT: 7497                     # 7497 for paper, 7496 for live
+  CLIENT_ID: 1
+
+  # Order types
+  DEFAULT_ORDER_TYPE: "MKT"      # Market orders for MVP
+  USE_BRACKET_ORDERS: false      # Phase 2 feature
+
+  # Slippage tracking
+  TRACK_SLIPPAGE: true
+  EXPECTED_SLIPPAGE_BPS: 5       # 5 bps expected
+
+  # Limits
+  MAX_ORDER_SIZE_USD: 2000       # $2K per order (for $10K capital)
+
+# ============================================================================
+# DATA SOURCES
+# ============================================================================
+DATA:
+  PRIMARY: "IBKR"                # Primary data source
+  FALLBACK: "yfinance"           # Fallback for backtesting
+
+  # Historical data
+  BACKTEST_START: "2022-01-01"
+  BACKTEST_END: "2024-12-31"
+
+  # Update frequency
+  MARKET_DATA_FREQ: "1d"         # Daily bars
+  FDA_UPDATE_FREQ: "1d"          # Check FDA calendar daily
+
+# ============================================================================
+# MONITORING & LOGGING
+# ============================================================================
+MONITORING:
+  # Performance metrics
+  METRICS_FREQ: "daily"          # Calculate daily
+  REPORT_FREQ: "weekly"          # Generate reports weekly
+
+  # Alerts
+  ALERT_ON_KILL_SWITCH: true
+  ALERT_ON_EXECUTION_ERROR: true
+  ALERT_EMAIL: null              # Set to email for alerts
+
+  # Logging
+  LOG_TRADES: true
+  LOG_SIGNALS: true
+  LOG_METRICS: true
+  LOG_DIR: "logs/"
+
+# ============================================================================
+# VALIDATION & ANTI-OVERFITTING
+# ============================================================================
+VALIDATION:
+  # Combinatorially Symmetric Cross-Validation
+  CSCV_BLOCKS: 8                 # Reduced from 16 (learned from Algo-trade)
+
+  # Statistical tests
+  PSR_BENCHMARK: 0.0             # Benchmark Sharpe for PSR
+  DSR_N_STRATEGIES: 3            # Number of strategies tested
+
+  # Minimum track record length
+  MIN_TRADES: 10                 # Minimum trades for statistical significance
+  MIN_MONTHS: 3                  # Minimum months for Sharpe calculation
+
+# ============================================================================
+# BANDIT (LinUCB for Strategy Selection)
+# ============================================================================
+BANDIT:
+  ALGORITHM: "LinUCB"
+  N_ARMS: 3                      # 3 strategies
+  ALPHA: 0.1                     # Exploration parameter
+  CONTEXT_FEATURES:
+    - "regime"                   # Calm/Normal/Storm
+    - "volatility"               # Recent volatility
+    - "correlation"              # Market correlation
+    - "ricci_curvature"          # Systemic fragility
+
+# ============================================================================
+# PERFORMANCE TARGETS (for evaluation)
+# ============================================================================
+TARGETS:
+  SHARPE_RATIO_MIN: 0.5
+  SHARPE_RATIO_TARGET: 0.7
+  ANNUAL_RETURN_MIN: 0.08        # 8%
+  ANNUAL_RETURN_TARGET: 0.15     # 15%
+  MAX_DRAWDOWN: 0.20             # 20%
+  WIN_RATE_MIN: 0.50             # 50%
+  NUM_TRADES_ANNUAL: [15, 20]    # 15-20 trades/year
