@@ -25,9 +25,9 @@ NET_LIM:
   Calm: 1.0
   Normal: 0.8
   Storm: 0.4
-VOL_TARGET: 0.1
-BOX_LIM: 0.25
-TURNOVER_PEN: 0.002
+VOL_TARGET: 0.15  # הגברת volatility target
+BOX_LIM: 0.30  # הגדלת box limit
+TURNOVER_PEN: 0.001  # הקטנת עלות turnover
 RIDGE_PEN: 0.0001
 LAMBDA_INIT: 0.0005
 LAMBDA_EMA_RHO: 0.1
@@ -55,5 +55,5 @@ BAYESIAN_OPTIMIZATION:
     RIDGE_PEN:
     - 1.0e-05
     - 0.001
-CSCV_M: 16
+CSCV_M: 8  # הקטנת מספר בלוקים למניעת אזהרות
 LINUCB_ALPHA: 0.1
