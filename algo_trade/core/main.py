@@ -25,6 +25,14 @@ from scipy.cluster.hierarchy import linkage, leaves_list
 from itertools import combinations
 from sklearn.decomposition import PCA
 
+# ייבוא סוכן GDT
+try:
+    from algo_trade.core.agents import GDTAgent, MarketState, GeometricIndicators
+    GDT_AVAILABLE = True
+except ImportError:
+    GDT_AVAILABLE = False
+    print("⚠️ סוכן GDT לא זמין. הריצה תימשך ללא מדדים גיאומטריים.")
+
 # =============================================================================
 # 0) קונפיג כללי – טעינה מקובץ YAML
 # =============================================================================
@@ -649,6 +657,7 @@ def run_day(
     t: int, prices: pd.DataFrame, returns: pd.DataFrame,
     w_prev: pd.Series, lam_prev: float, linucb: "LinUCB",
     C_prev: pd.DataFrame,
+    gdt_agent: Optional["GDTAgent"] = None,
     params: Dict = CFG
 ) -> Tuple[float, pd.Series, float, pd.DataFrame, dict, pd.Series, float]:
 
@@ -656,6 +665,36 @@ def run_day(
     regime = detect_regime(returns.iloc[:t])
     rho60 = avg_corr(returns.iloc[:t].tail(60))
     context_vec = np.array([1.0, float(regime == "Calm"), float(regime == "Storm"), rho60])
+
+    # 1a. חישוב מדדים גיאומטריים (GDT)
+    gdt_info = {}
+    gdt_state = None
+    gdt_exposure_factor = 1.0
+
+    if GDT_AVAILABLE and gdt_agent is not None:
+        try:
+            # חישוב מדדים גיאומטריים
+            window_prices = prices.iloc[:t]
+            gdt_state, gdt_action, gdt_indicators = gdt_agent.process_market_data(window_prices)
+
+            # שמירת מידע GDT
+            gdt_info = {
+                'state': gdt_state.name,
+                'action': gdt_action.action_type,
+                'exposure': gdt_action.exposure,
+                'mean_curvature': gdt_indicators['mean_curvature'],
+                'curvature_volatility': gdt_indicators['curvature_volatility'],
+                'manifold_velocity': gdt_indicators['manifold_velocity'],
+                'geodesic_deviation': gdt_indicators['geodesic_deviation'],
+                'power_law_fit': gdt_indicators['power_law_fit']['is_power_law']
+            }
+
+            # התאמת גורם החשיפה לפי מצב GDT
+            gdt_exposure_factor = gdt_action.exposure
+
+        except Exception as e:
+            print(f"⚠️ שגיאה בחישוב GDT: {e}")
+            gdt_info = {'state': 'ERROR', 'error': str(e)}
     
     T_N_ratio = (t+1) / CFG["N"]
     C_new = adaptive_cov(returns.iloc[:t], regime, T_N_ratio)
@@ -706,6 +745,11 @@ def run_day(
     net_lim = CFG["NET_LIM"].get(regime, CFG["NET_LIM"]["Normal"])
 
     w_tgt_qp = solve_qp(mu_hat, C_new, w_prev, gross_lim, net_lim, params)
+
+    # התאמת המשקולות לפי מצב GDT
+    if GDT_AVAILABLE and gdt_agent is not None and gdt_exposure_factor != 1.0:
+        w_tgt_qp = w_tgt_qp * gdt_exposure_factor
+
     w_hrp_benchmark = hrp_portfolio(returns.iloc[:t])
     w_bl_benchmark = black_litterman(w_hrp_benchmark, C_new)
 
@@ -728,7 +772,8 @@ def run_day(
         drift=drift,
         blind=blind_state,
         pbo_score=pbo_score,
-        cov_type="EWMA" if T_N_ratio >= 2.0 else "EWMA+LW"
+        cov_type="EWMA" if T_N_ratio >= 2.0 else "EWMA+LW",
+        gdt=gdt_info  # הוספת מידע GDT
     )
     return net_ret, w_tgt_qp, lam_new, C_new, info, w_hrp_benchmark, w_bl_benchmark
 
@@ -747,11 +792,19 @@ def evaluate_params(params: Dict, returns: pd.DataFrame) -> float:
     linucb = LinUCB(n_arms=4, n_features=4, alpha=CFG["LINUCB_ALPHA"])
     C_prev = adaptive_cov(returns.iloc[:30], "Normal", 1)
 
+    # יצירת סוכן GDT אם זמין
+    gdt_agent = None
+    if GDT_AVAILABLE:
+        try:
+            gdt_agent = GDTAgent(k_neighbors=10, window=60)
+        except Exception:
+            pass
+
     for t in range(30, len(returns)):
-        net_ret, w, lam, C_new, _, _, _ = run_day(t, None, returns, w, lam, linucb, C_prev, params)
+        net_ret, w, lam, C_new, _, _, _ = run_day(t, None, returns, w, lam, linucb, C_prev, gdt_agent, params)
         history.append(net_ret)
         C_prev = C_new
-    
+
     sr_hist = (np.mean(history) / (np.std(history) + 1e-12)) * np.sqrt(252)
     return float(sr_hist)
 
@@ -807,14 +860,23 @@ def main():
     lam = CFG["LAMBDA_INIT"]
     linucb = LinUCB(n_arms=4, n_features=4, alpha=CFG["LINUCB_ALPHA"])
     pnl_hist: List[float] = []
-    
+
+    # יצירת סוכן GDT
+    gdt_agent = None
+    if GDT_AVAILABLE:
+        try:
+            gdt_agent = GDTAgent(k_neighbors=10, window=60)
+            print("✅ סוכן GDT הופעל בהצלחה")
+        except Exception as e:
+            print(f"⚠️ לא ניתן להפעיל סוכן GDT: {e}")
+
     C_prev = adaptive_cov(returns.iloc[:30], "Normal", 1)
-    
+
     print("\n🚀 התחלת סימולציה מלאה עם הפרמטרים האופטימליים...")
     print("---")
-    
+
     for t in range(30, config["DAYS"]):
-        net_ret, w, lam, C_new, info, w_hrp, w_bl = run_day(t, prices, returns, w, lam, linucb, C_prev, CFG)
+        net_ret, w, lam, C_new, info, w_hrp, w_bl = run_day(t, prices, returns, w, lam, linucb, C_prev, gdt_agent, CFG)
         pnl_hist.append(net_ret)
         
         T_obs = len(pnl_hist)
@@ -825,9 +887,17 @@ def main():
 
         if (t % config["PRINT_EVERY"]) == 0:
             cum = float(np.prod(1 + np.array(pnl_hist)) - 1)
+            gdt_str = ""
+            if info.get('gdt'):
+                gdt = info['gdt']
+                if 'state' in gdt:
+                    gdt_str = f" | GDT={gdt['state']:<12}"
+                    if 'exposure' in gdt:
+                        gdt_str += f" Exp={gdt['exposure']:.0%}"
+
             print(
                 f"יום {t:>3} | Regime={info['regime']:<6} | Gate={info['gate']:<18} | PnL={net_ret*100:>6.2f}% | "
-                f"cum={cum*100:>6.2f}% | DD={dd*100:>6.2f}% | SR={sr:.2f} | PSR={psr:.2f} | DSR={dsr:.2f} | PBO={info['pbo_score']:.2f}"
+                f"cum={cum*100:>6.2f}% | DD={dd*100:>6.2f}% | SR={sr:.2f} | PSR={psr:.2f} | DSR={dsr:.2f} | PBO={info['pbo_score']:.2f}{gdt_str}"
             )
 
         if psr < CFG["PSR_KILL_SWITCH"] and sr < 0.0:
