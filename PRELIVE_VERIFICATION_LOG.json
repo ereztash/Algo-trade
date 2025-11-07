@@ -1,0 +1,707 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Pre-Live Verification Log",
+  "description": "Formal verification log for IBKR Pre-Live gates with boolean gate logic",
+  "type": "object",
+  "required": [
+    "timestamp",
+    "session_id",
+    "branch",
+    "gates",
+    "final_decision",
+    "signatures"
+  ],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Verification timestamp (UTC ISO8601)"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Unique verification session ID"
+    },
+    "branch": {
+      "type": "string",
+      "description": "Git branch being verified"
+    },
+    "commit_hash": {
+      "type": "string",
+      "description": "Git commit hash"
+    },
+    "gates": {
+      "type": "object",
+      "description": "Gate status for each stage",
+      "required": ["gate1", "gate2", "gate3", "gate4", "gate5", "gate6", "gate7", "gate8"],
+      "properties": {
+        "gate1": {
+          "type": "object",
+          "description": "Stage 1: Artifact Validation",
+          "required": ["status", "condition", "metrics"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["PASS", "FAIL", "CONDITIONAL", "PENDING"],
+              "description": "Gate status"
+            },
+            "condition": {
+              "type": "string",
+              "description": "Boolean condition (coverage≥80%) AND (governance✓) AND (fixtures✓)",
+              "default": "(coverage>=0.80) AND (governance==True) AND (fixtures==True)"
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "artifact_coverage": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Artifact coverage ratio"
+                },
+                "test_coverage": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "Code test coverage ratio"
+                },
+                "governance_signed": {
+                  "type": "boolean",
+                  "description": "Governance fixtures signed"
+                },
+                "fixtures_valid": {
+                  "type": "boolean",
+                  "description": "Fixtures validated"
+                }
+              }
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "anomalies": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of anomalies found"
+            }
+          }
+        },
+        "gate2": {
+          "type": "object",
+          "description": "Stage 2: Hierarchical Breakdown",
+          "required": ["status", "condition"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["PASS", "FAIL", "CONDITIONAL", "PENDING"]
+            },
+            "condition": {
+              "type": "string",
+              "default": "(all_stages_defined==True) AND (input_output_clear==True)"
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "stages_defined": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 8
+                },
+                "architecture_approved": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "gate3": {
+          "type": "object",
+          "description": "Stage 3: Interface Mapping",
+          "required": ["status", "condition"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["PASS", "FAIL", "CONDITIONAL", "PENDING"]
+            },
+            "condition": {
+              "type": "string",
+              "default": "(all_operations_mapped==True) AND (error_codes_documented==True)"
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "operations_mapped": {
+                  "type": "integer",
+                  "description": "Number of IBKR operations mapped"
+                },
+                "error_codes_documented": {
+                  "type": "integer",
+                  "description": "Number of error codes documented"
+                },
+                "slas_defined": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "gate4": {
+          "type": "object",
+          "description": "Stage 4: Implementation Prep",
+          "required": ["status", "condition"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["PASS", "FAIL", "CONDITIONAL", "PENDING"]
+            },
+            "condition": {
+              "type": "string",
+              "default": "(implementation_complete==True) AND (unit_tests_pass==True)"
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "implementation_complete": {
+                  "type": "boolean"
+                },
+                "unit_tests_passed": {
+                  "type": "integer"
+                },
+                "unit_tests_total": {
+                  "type": "integer"
+                },
+                "code_review_approved": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "gate5": {
+          "type": "object",
+          "description": "Stage 5: Test Infrastructure",
+          "required": ["status", "condition"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["PASS", "FAIL", "CONDITIONAL", "PENDING"]
+            },
+            "condition": {
+              "type": "string",
+              "default": "(stage_tests_exist==True) AND (tests_runnable==True)"
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "stage_tests_created": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3,
+                  "description": "Number of stage tests (6,7,8)"
+                },
+                "tests_runnable": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "gate6": {
+          "type": "object",
+          "description": "Stage 6: Account Config Probe",
+          "required": ["status", "condition"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["PASS", "FAIL", "CONDITIONAL", "PENDING"]
+            },
+            "condition": {
+              "type": "string",
+              "default": "(connection_successful==True) AND (buying_power>0) AND (no_permission_mismatch==True)"
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "connection_successful": {
+                  "type": "boolean"
+                },
+                "account_metadata_retrieved": {
+                  "type": "boolean"
+                },
+                "buying_power": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "permission_mismatch": {
+                  "type": "boolean"
+                },
+                "account_config_file": {
+                  "type": "string",
+                  "description": "Path to ACCOUNT_CONFIG.json"
+                }
+              }
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "gate7": {
+          "type": "object",
+          "description": "Stage 7: Paper Trading Validation",
+          "required": ["status", "condition"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["PASS", "FAIL", "CONDITIONAL", "PENDING"]
+            },
+            "condition": {
+              "type": "string",
+              "default": "(latency_delta<0.50) AND (pacing_violations==0) AND (fill_rate>0.98) AND (sharpe_paper>=0.5*sharpe_backtest)"
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "latency_p50_ms": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "latency_p95_ms": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "latency_p99_ms": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "latency_delta": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Latency increase vs. mock (ratio)"
+                },
+                "pacing_violations": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "fill_rate": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "sharpe_paper": {
+                  "type": "number"
+                },
+                "sharpe_backtest": {
+                  "type": "number"
+                },
+                "sharpe_ratio": {
+                  "type": "number",
+                  "description": "sharpe_paper / sharpe_backtest"
+                },
+                "total_trades": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "disconnects": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "paper_trading_log": {
+                  "type": "string",
+                  "description": "Path to PAPER_TRADING_LOG.json"
+                },
+                "paper_trading_metrics": {
+                  "type": "string",
+                  "description": "Path to PAPER_TRADING_METRICS.csv"
+                }
+              }
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "gate8": {
+          "type": "object",
+          "description": "Stage 8: Go-Live Decision",
+          "required": ["status", "condition"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["PASS", "FAIL", "CONDITIONAL", "PENDING"]
+            },
+            "condition": {
+              "type": "string",
+              "default": "(all_gates_1_to_7_pass==True) AND (governance_signed==True) AND (kill_switch_verified==True)"
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "gates_passed": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 7,
+                  "description": "Number of gates 1-7 that passed"
+                },
+                "governance_signed": {
+                  "type": "boolean"
+                },
+                "rollback_plan_verified": {
+                  "type": "boolean"
+                },
+                "kill_switch_verified": {
+                  "type": "boolean"
+                },
+                "go_live_decision_file": {
+                  "type": "string",
+                  "description": "Path to GO_LIVE_DECISION_GATE.md"
+                },
+                "rollback_procedure_file": {
+                  "type": "string",
+                  "description": "Path to ROLLBACK_PROCEDURE.md"
+                }
+              }
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "final_decision": {
+      "type": "object",
+      "required": ["status", "reasoning"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["PASS", "FAIL", "CONDITIONAL"],
+          "description": "Final go-live decision"
+        },
+        "reasoning": {
+          "type": "string",
+          "description": "Detailed reasoning for decision"
+        },
+        "conditional_requirements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Requirements if CONDITIONAL approval"
+        }
+      }
+    },
+    "formal_logic": {
+      "type": "object",
+      "description": "Formal boolean logic evaluation",
+      "properties": {
+        "gate_logic": {
+          "type": "string",
+          "description": "Overall gate condition",
+          "default": "IF (∀i∈[1,7]: gate_i==PASS) AND (gate8==PASS) THEN PASS ELSE FAIL"
+        },
+        "evaluated": {
+          "type": "boolean",
+          "description": "Whether logic was evaluated"
+        },
+        "result": {
+          "type": "boolean",
+          "description": "Boolean evaluation result"
+        }
+      }
+    },
+    "signatures": {
+      "type": "object",
+      "required": ["risk_officer", "cto", "lead_trader"],
+      "properties": {
+        "risk_officer": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string"},
+            "signature": {"type": "string"},
+            "timestamp": {"type": "string", "format": "date-time"},
+            "approved": {"type": "boolean"}
+          }
+        },
+        "cto": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string"},
+            "signature": {"type": "string"},
+            "timestamp": {"type": "string", "format": "date-time"},
+            "approved": {"type": "boolean"}
+          }
+        },
+        "lead_trader": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string"},
+            "signature": {"type": "string"},
+            "timestamp": {"type": "string", "format": "date-time"},
+            "approved": {"type": "boolean"}
+          }
+        },
+        "qa_lead": {
+          "type": "object",
+          "properties": {
+            "name": {"type": "string"},
+            "signature": {"type": "string"},
+            "timestamp": {"type": "string", "format": "date-time"},
+            "approved": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "anomalies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stage": {"type": "string"},
+          "severity": {"type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"]},
+          "description": {"type": "string"},
+          "resolution": {"type": "string"},
+          "resolved": {"type": "boolean"}
+        }
+      }
+    },
+    "rollback_triggers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "trigger": {"type": "string"},
+          "condition": {"type": "string"},
+          "action": {"type": "string"}
+        }
+      },
+      "default": [
+        {
+          "trigger": "PnL Kill Switch",
+          "condition": "pnl < -0.05",
+          "action": "HALT_AND_FLATTEN"
+        },
+        {
+          "trigger": "Max Drawdown",
+          "condition": "max_drawdown > 0.15",
+          "action": "HALT_AND_FLATTEN"
+        },
+        {
+          "trigger": "PSR Kill Switch",
+          "condition": "psr < 0.20",
+          "action": "HALT_AND_INVESTIGATE"
+        },
+        {
+          "trigger": "Pacing Violations",
+          "condition": "pacing_violations > 10/hour",
+          "action": "SLOW_DOWN"
+        }
+      ]
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "generated_by": {"type": "string"},
+        "tool_version": {"type": "string"},
+        "environment": {"type": "string", "enum": ["PAPER", "LIVE"]},
+        "account_id": {"type": "string"}
+      }
+    }
+  },
+  "examples": [
+    {
+      "timestamp": "2025-11-07T16:00:00Z",
+      "session_id": "prelive_20251107_001",
+      "branch": "claude/ibkr-prelive-validation-gates-011CUto1SmoYBABTX8Qm81TH",
+      "commit_hash": "c0518de",
+      "gates": {
+        "gate1": {
+          "status": "CONDITIONAL",
+          "condition": "(coverage>=0.80) AND (governance==True) AND (fixtures==True)",
+          "metrics": {
+            "artifact_coverage": 0.57,
+            "test_coverage": 0.0,
+            "governance_signed": true,
+            "fixtures_valid": true
+          },
+          "timestamp": "2025-11-07T14:00:00Z",
+          "anomalies": ["Artifact coverage 57% < 80% target", "Test coverage unmeasured"]
+        },
+        "gate2": {
+          "status": "PASS",
+          "condition": "(all_stages_defined==True) AND (input_output_clear==True)",
+          "metrics": {
+            "stages_defined": 8,
+            "architecture_approved": true
+          },
+          "timestamp": "2025-11-07T15:00:00Z"
+        },
+        "gate3": {
+          "status": "PASS",
+          "condition": "(all_operations_mapped==True) AND (error_codes_documented==True)",
+          "metrics": {
+            "operations_mapped": 8,
+            "error_codes_documented": 12,
+            "slas_defined": true
+          },
+          "timestamp": "2025-11-07T15:30:00Z"
+        },
+        "gate4": {
+          "status": "PENDING",
+          "condition": "(implementation_complete==True) AND (unit_tests_pass==True)",
+          "metrics": {
+            "implementation_complete": false,
+            "unit_tests_passed": 0,
+            "unit_tests_total": 0,
+            "code_review_approved": false
+          },
+          "timestamp": null
+        },
+        "gate5": {
+          "status": "PENDING",
+          "condition": "(stage_tests_exist==True) AND (tests_runnable==True)",
+          "metrics": {
+            "stage_tests_created": 0,
+            "tests_runnable": false
+          },
+          "timestamp": null
+        },
+        "gate6": {
+          "status": "PENDING",
+          "condition": "(connection_successful==True) AND (buying_power>0)",
+          "metrics": {
+            "connection_successful": false,
+            "account_metadata_retrieved": false,
+            "buying_power": 0,
+            "permission_mismatch": false,
+            "account_config_file": null
+          },
+          "timestamp": null
+        },
+        "gate7": {
+          "status": "PENDING",
+          "condition": "(latency_delta<0.50) AND (pacing_violations==0) AND (fill_rate>0.98)",
+          "metrics": {
+            "latency_p50_ms": 0,
+            "latency_p95_ms": 0,
+            "latency_p99_ms": 0,
+            "latency_delta": 0,
+            "pacing_violations": 0,
+            "fill_rate": 0,
+            "sharpe_paper": 0,
+            "sharpe_backtest": 0,
+            "sharpe_ratio": 0,
+            "total_trades": 0,
+            "disconnects": 0,
+            "paper_trading_log": null,
+            "paper_trading_metrics": null
+          },
+          "timestamp": null
+        },
+        "gate8": {
+          "status": "PENDING",
+          "condition": "(all_gates_1_to_7_pass==True) AND (governance_signed==True)",
+          "metrics": {
+            "gates_passed": 2,
+            "governance_signed": false,
+            "rollback_plan_verified": false,
+            "kill_switch_verified": false,
+            "go_live_decision_file": null,
+            "rollback_procedure_file": null
+          },
+          "timestamp": null
+        }
+      },
+      "final_decision": {
+        "status": "FAIL",
+        "reasoning": "Gates 1,4,5,6,7,8 not passed. Cannot proceed to production.",
+        "conditional_requirements": []
+      },
+      "formal_logic": {
+        "gate_logic": "IF (∀i∈[1,7]: gate_i==PASS) AND (gate8==PASS) THEN PASS ELSE FAIL",
+        "evaluated": true,
+        "result": false
+      },
+      "signatures": {
+        "risk_officer": {
+          "name": "TBD",
+          "signature": null,
+          "timestamp": null,
+          "approved": false
+        },
+        "cto": {
+          "name": "TBD",
+          "signature": null,
+          "timestamp": null,
+          "approved": false
+        },
+        "lead_trader": {
+          "name": "TBD",
+          "signature": null,
+          "timestamp": null,
+          "approved": false
+        },
+        "qa_lead": {
+          "name": "Claude Code",
+          "signature": "DIGITAL_SIGNATURE_c0518de",
+          "timestamp": "2025-11-07T16:00:00Z",
+          "approved": true
+        }
+      },
+      "anomalies": [
+        {
+          "stage": "Stage 1",
+          "severity": "HIGH",
+          "description": "Artifact coverage 57% below 80% threshold",
+          "resolution": "Complete missing artifacts (IBKR_INTERFACE_MAP, stage tests, etc.)",
+          "resolved": false
+        },
+        {
+          "stage": "Stage 1",
+          "severity": "HIGH",
+          "description": "Test coverage not measured",
+          "resolution": "Run pytest --cov to establish baseline",
+          "resolved": false
+        }
+      ],
+      "rollback_triggers": [
+        {
+          "trigger": "PnL Kill Switch",
+          "condition": "pnl < -0.05",
+          "action": "HALT_AND_FLATTEN"
+        },
+        {
+          "trigger": "Max Drawdown",
+          "condition": "max_drawdown > 0.15",
+          "action": "HALT_AND_FLATTEN"
+        }
+      ],
+      "metadata": {
+        "generated_by": "Claude Code (AI Assistant)",
+        "tool_version": "1.0",
+        "environment": "PAPER",
+        "account_id": "IBKR_PAPER_ACCOUNT_ID"
+      }
+    }
+  ]
+}
