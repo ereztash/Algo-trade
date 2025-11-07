@@ -14,6 +14,8 @@
 ### למנהלים ומקבלי החלטות:
 - **[📊 מסמך מנהלים (Executive Summary)](./EXECUTIVE_SUMMARY_HE.md)** - סיכום מקיף של המערכת, מצב נוכחי, ותוכנית עבודה לדיפלוי
 - **[📈 תרשימי זרימה (Decision Flow Diagrams)](./DECISION_FLOW_DIAGRAMS.md)** - תרשימים מפורטים של לוגיקת קבלת ההחלטות
+- **[🎯 מצב נוכחי (Status Now)](./STATUS_NOW.md)** - ⭐ **חדש!** הערכת מצב End-to-End בן 15 תחומים, פערים קריטיים, ו-KPIs
+- **[🚀 Roadmap שבועיים (2-Week Roadmap)](./2-WEEK_ROADMAP.md)** - ⭐ **חדש!** 6 PRs ממופה לסגירת פערים קריטיים
 
 ### למפתחים:
 - קוד מתועד היטב בעברית (docstrings)
