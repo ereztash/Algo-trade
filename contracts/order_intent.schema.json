@@ -1,0 +1,216 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ereztash/Algo-trade/contracts/order_intent.schema.json",
+  "title": "OrderIntent",
+  "description": "Order intent emitted by Strategy Plane to Order Plane",
+  "type": "object",
+  "required": [
+    "event_type",
+    "intent_id",
+    "symbol",
+    "direction",
+    "quantity",
+    "order_type",
+    "timestamp",
+    "strategy_id"
+  ],
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "const": "order_intent",
+      "description": "Event type identifier"
+    },
+    "intent_id": {
+      "type": "string",
+      "description": "Unique intent identifier (UUID)",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "symbol": {
+      "type": "string",
+      "description": "Asset symbol",
+      "minLength": 1,
+      "maxLength": 20,
+      "pattern": "^[A-Z0-9]+$"
+    },
+    "direction": {
+      "type": "string",
+      "description": "Order direction",
+      "enum": ["BUY", "SELL"]
+    },
+    "quantity": {
+      "type": "number",
+      "description": "Order quantity (positive)",
+      "exclusiveMinimum": 0
+    },
+    "order_type": {
+      "type": "string",
+      "description": "Order type",
+      "enum": ["MARKET", "LIMIT", "STOP", "STOP_LIMIT", "ADAPTIVE"]
+    },
+    "limit_price": {
+      "type": "number",
+      "description": "Limit price (required for LIMIT orders)",
+      "exclusiveMinimum": 0
+    },
+    "stop_price": {
+      "type": "number",
+      "description": "Stop price (required for STOP orders)",
+      "exclusiveMinimum": 0
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Intent generation timestamp (UTC)"
+    },
+    "strategy_id": {
+      "type": "string",
+      "description": "Strategy that generated this intent",
+      "enum": ["OFI", "ERN", "VRP", "POS", "TSX", "SIF", "COMPOSITE"]
+    },
+    "time_in_force": {
+      "type": "string",
+      "description": "Order time in force",
+      "enum": ["DAY", "GTC", "IOC", "FOK"],
+      "default": "DAY"
+    },
+    "urgency": {
+      "type": "string",
+      "description": "Execution urgency",
+      "enum": ["LOW", "NORMAL", "HIGH", "URGENT"],
+      "default": "NORMAL"
+    },
+    "target_weight": {
+      "type": "number",
+      "description": "Target portfolio weight",
+      "minimum": -1.0,
+      "maximum": 1.0
+    },
+    "current_weight": {
+      "type": "number",
+      "description": "Current portfolio weight",
+      "minimum": -1.0,
+      "maximum": 1.0
+    },
+    "signal_strength": {
+      "type": "number",
+      "description": "Signal strength (0-1)",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "risk_checks": {
+      "type": "object",
+      "description": "Pre-computed risk checks",
+      "properties": {
+        "within_box_limit": {
+          "type": "boolean",
+          "description": "Position within box constraints"
+        },
+        "within_gross_limit": {
+          "type": "boolean",
+          "description": "Gross exposure within limit"
+        },
+        "within_net_limit": {
+          "type": "boolean",
+          "description": "Net exposure within limit"
+        },
+        "pnl_kill_switch": {
+          "type": "boolean",
+          "description": "PnL kill switch NOT triggered"
+        },
+        "drawdown_kill_switch": {
+          "type": "boolean",
+          "description": "Drawdown kill switch NOT triggered"
+        }
+      }
+    },
+    "execution_params": {
+      "type": "object",
+      "description": "Execution parameters",
+      "properties": {
+        "pov_cap": {
+          "type": "number",
+          "description": "POV (Percentage of Volume) cap",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.08
+        },
+        "adv_cap": {
+          "type": "number",
+          "description": "ADV (Average Daily Volume) cap",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.10
+        },
+        "max_slippage_bps": {
+          "type": "number",
+          "description": "Maximum acceptable slippage (basis points)",
+          "minimum": 0,
+          "default": 10
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata",
+      "properties": {
+        "portfolio_id": {
+          "type": "string",
+          "description": "Portfolio identifier"
+        },
+        "regime": {
+          "type": "string",
+          "description": "Current market regime",
+          "enum": ["Calm", "Normal", "Storm"]
+        },
+        "kafka_topic": {
+          "type": "string",
+          "description": "Kafka topic",
+          "default": "order_intents"
+        }
+      }
+    }
+  },
+  "if": {
+    "properties": {
+      "order_type": {"const": "LIMIT"}
+    }
+  },
+  "then": {
+    "required": ["limit_price"]
+  },
+  "examples": [
+    {
+      "event_type": "order_intent",
+      "intent_id": "550e8400-e29b-41d4-a716-446655440000",
+      "symbol": "TSLA",
+      "direction": "BUY",
+      "quantity": 100,
+      "order_type": "LIMIT",
+      "limit_price": 245.50,
+      "timestamp": "2025-11-07T14:30:00Z",
+      "strategy_id": "COMPOSITE",
+      "time_in_force": "DAY",
+      "urgency": "NORMAL",
+      "target_weight": 0.15,
+      "current_weight": 0.10,
+      "signal_strength": 0.72,
+      "risk_checks": {
+        "within_box_limit": true,
+        "within_gross_limit": true,
+        "within_net_limit": true,
+        "pnl_kill_switch": true,
+        "drawdown_kill_switch": true
+      },
+      "execution_params": {
+        "pov_cap": 0.08,
+        "adv_cap": 0.10,
+        "max_slippage_bps": 10
+      },
+      "metadata": {
+        "portfolio_id": "main_portfolio",
+        "regime": "Normal",
+        "kafka_topic": "order_intents"
+      }
+    }
+  ]
+}

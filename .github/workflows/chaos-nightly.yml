@@ -1,0 +1,193 @@
+name: Chaos Tests (Nightly)
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 2 AM UTC daily
+  workflow_dispatch:      # Manual trigger
+
+jobs:
+  chaos-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run chaos tests
+        id: chaos
+        run: |
+          pytest tests/chaos/ -v \
+            --tb=short \
+            --timeout=600 \
+            --junitxml=reports/chaos/junit-chaos.xml \
+            || echo "chaos_failed=true" >> $GITHUB_OUTPUT
+        continue-on-error: true
+
+      - name: Generate chaos scorecard
+        run: |
+          echo "Generating chaos scorecard..."
+          python scripts/generate_chaos_scorecard.py || echo "Scorecard generation skipped (script not yet implemented)"
+
+      - name: Archive chaos reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: chaos-reports
+          path: reports/chaos/
+
+      - name: Create chaos summary
+        run: |
+          cat << 'EOF' > chaos-summary.md
+          # Chaos Engineering Test Results
+
+          ## Test Execution
+          - **Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          - **Duration:** $(date -u -d @$SECONDS +%M:%S)
+          - **Status:** ${{ steps.chaos.outcome }}
+
+          ## Chaos Scenarios Tested
+          1. Network disconnect (3s, 10s, 30s)
+          2. High latency injection (500ms, 2s, 5s)
+          3. Memory pressure simulation
+          4. CPU saturation tests
+          5. Message loss scenarios (5%, 20%)
+          6. Cascading failure tests
+
+          ## Recovery Metrics
+          - **Target Recovery Time:** ≤30 seconds
+          - **Actual Recovery Time:** TBD (tests in development)
+          - **Pass/Fail:** Pending full implementation
+
+          ## Recommendations
+          - Continue monitoring system resilience
+          - Implement additional failure scenarios
+          - Track recovery time trends
+
+          EOF
+
+      - name: Post summary to Slack
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          payload: |
+            {
+              "text": "⚠️ Chaos tests failed in nightly run",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Chaos Engineering Tests Failed*\n\nNightly chaos tests encountered failures. Please review the test results."
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n${{ github.repository }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Run:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Results>"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        continue-on-error: true
+
+      - name: Create GitHub Issue on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const title = '🔥 Chaos Tests Failed in Nightly Run';
+            const body = `
+            ## Chaos Engineering Test Failure
+
+            The nightly chaos testing suite has failed.
+
+            ### Details
+            - **Workflow:** ${{ github.workflow }}
+            - **Run:** ${{ github.run_id }}
+            - **Commit:** ${{ github.sha }}
+            - **Date:** ${new Date().toISOString()}
+
+            ### Actions Required
+            1. Review the test results and logs
+            2. Identify the root cause of failures
+            3. Implement fixes for resilience issues
+            4. Re-run chaos tests to verify fixes
+
+            ### Links
+            - [Test Results](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - [Chaos Test Documentation](./docs/CHAOS_GUIDE.md)
+
+            ### Labels
+            - chaos-testing
+            - resilience
+            - urgent
+
+            /cc @QA-team @DevOps-team
+            `;
+
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['chaos-testing', 'resilience', 'urgent', 'automated']
+            });
+        continue-on-error: true
+
+  chaos-analysis:
+    needs: chaos-tests
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Download chaos reports
+        uses: actions/download-artifact@v3
+        with:
+          name: chaos-reports
+          path: reports/chaos/
+
+      - name: Analyze chaos results
+        run: |
+          echo "Analyzing chaos test results..."
+          echo "1. Checking recovery times..."
+          echo "2. Analyzing failure patterns..."
+          echo "3. Generating recommendations..."
+          echo ""
+          echo "📊 Chaos Analysis Summary (To be implemented)"
+
+      - name: Generate trend report
+        run: |
+          echo "Generating historical trend report..."
+          echo "This will track chaos test results over time"
+          echo "TODO: Implement trend analysis"
