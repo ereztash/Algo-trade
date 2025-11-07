@@ -1,0 +1,188 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ereztash/Algo-trade/contracts/bar_event.schema.json",
+  "title": "BarEvent",
+  "description": "Market data bar event (OHLCV candle) emitted by Data Plane",
+  "type": "object",
+  "required": [
+    "event_type",
+    "symbol",
+    "timestamp",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume"
+  ],
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "const": "bar_event",
+      "description": "Event type identifier"
+    },
+    "symbol": {
+      "type": "string",
+      "description": "Asset symbol (e.g., SPY, TSLA, ESM25)",
+      "minLength": 1,
+      "maxLength": 20,
+      "pattern": "^[A-Z0-9]+$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of bar close (UTC)"
+    },
+    "open": {
+      "type": "number",
+      "description": "Opening price",
+      "exclusiveMinimum": 0
+    },
+    "high": {
+      "type": "number",
+      "description": "Highest price in period",
+      "exclusiveMinimum": 0
+    },
+    "low": {
+      "type": "number",
+      "description": "Lowest price in period",
+      "exclusiveMinimum": 0
+    },
+    "close": {
+      "type": "number",
+      "description": "Closing price",
+      "exclusiveMinimum": 0
+    },
+    "volume": {
+      "type": "integer",
+      "description": "Trading volume",
+      "minimum": 0
+    },
+    "bar_duration": {
+      "type": "string",
+      "description": "Bar duration (e.g., 1m, 5m, 1h, 1d)",
+      "enum": ["1m", "5m", "15m", "30m", "1h", "4h", "1d"],
+      "default": "1d"
+    },
+    "asset_class": {
+      "type": "string",
+      "description": "Asset class",
+      "enum": ["equity", "future", "forex", "crypto", "bond"],
+      "default": "equity"
+    },
+    "exchange": {
+      "type": "string",
+      "description": "Exchange code",
+      "examples": ["NASDAQ", "NYSE", "CME", "IDEALPRO"]
+    },
+    "currency": {
+      "type": "string",
+      "description": "Price currency",
+      "pattern": "^[A-Z]{3}$",
+      "default": "USD"
+    },
+    "data_quality": {
+      "type": "object",
+      "description": "Data quality metadata",
+      "properties": {
+        "completeness_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Completeness score (0-1)"
+        },
+        "freshness_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Data freshness in milliseconds"
+        },
+        "source": {
+          "type": "string",
+          "description": "Data source (e.g., IBKR, cache)",
+          "enum": ["ibkr_realtime", "ibkr_historical", "cache", "synthetic"]
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata",
+      "properties": {
+        "producer_id": {
+          "type": "string",
+          "description": "ID of data plane producer"
+        },
+        "sequence_number": {
+          "type": "integer",
+          "description": "Sequence number for ordering",
+          "minimum": 0
+        },
+        "kafka_topic": {
+          "type": "string",
+          "description": "Kafka topic name",
+          "default": "market_events"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "description": "OHLC consistency: high >= open, high >= close",
+      "if": {
+        "properties": {
+          "high": true,
+          "open": true,
+          "close": true
+        }
+      },
+      "then": {
+        "properties": {
+          "high": {
+            "minimum": {"$data": "1/open"}
+          }
+        }
+      }
+    },
+    {
+      "description": "OHLC consistency: low <= open, low <= close",
+      "if": {
+        "properties": {
+          "low": true,
+          "open": true,
+          "close": true
+        }
+      },
+      "then": {
+        "properties": {
+          "low": {
+            "maximum": {"$data": "1/open"}
+          }
+        }
+      }
+    }
+  ],
+  "examples": [
+    {
+      "event_type": "bar_event",
+      "symbol": "SPY",
+      "timestamp": "2025-11-07T16:00:00Z",
+      "open": 450.25,
+      "high": 452.80,
+      "low": 449.50,
+      "close": 451.75,
+      "volume": 85234567,
+      "bar_duration": "1d",
+      "asset_class": "equity",
+      "exchange": "NYSE",
+      "currency": "USD",
+      "data_quality": {
+        "completeness_score": 1.0,
+        "freshness_ms": 150,
+        "source": "ibkr_realtime"
+      },
+      "metadata": {
+        "producer_id": "data_plane_1",
+        "sequence_number": 12345,
+        "kafka_topic": "market_events"
+      }
+    }
+  ]
+}

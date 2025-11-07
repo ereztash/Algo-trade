@@ -1,0 +1,290 @@
+name: Governance Gate
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-risk-params:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Full history for git diff
+
+      - name: Check risk parameter changes
+        id: risk_check
+        run: |
+          echo "Checking for risk parameter changes..."
+
+          # Check if config.py changed
+          if git diff --name-only origin/${{ github.base_ref }}..HEAD | grep -q "algo_trade/core/config.py"; then
+            echo "⚠️  Config file changed, analyzing risk parameters..."
+
+            # Extract changed risk parameters
+            CHANGED_PARAMS=$(git diff origin/${{ github.base_ref }}..HEAD algo_trade/core/config.py | \
+              grep -E "^[+-].*(" | \
+              grep -E "(KILL_PNL|MAX_DD_KILL_SWITCH|PSR_KILL_SWITCH|BOX_LIM|GROSS_LIM|NET_LIM|VOL_TARGET)" || true)
+
+            if [ -n "$CHANGED_PARAMS" ]; then
+              echo "🚨 CRITICAL: Risk parameters modified!"
+              echo ""
+              echo "Changed parameters:"
+              echo "$CHANGED_PARAMS"
+              echo ""
+              echo "risk_params_changed=true" >> $GITHUB_OUTPUT
+              echo "changed_params<<EOF" >> $GITHUB_OUTPUT
+              echo "$CHANGED_PARAMS" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+            else
+              echo "✅ No critical risk parameters changed"
+              echo "risk_params_changed=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "✅ Config file not modified"
+            echo "risk_params_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR if risk params changed
+        if: steps.risk_check.outputs.risk_params_changed == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const message = `## ⚠️ Risk Parameter Change Detected
+
+            This PR modifies critical risk management parameters. **Manual approval required** from Risk Officer.
+
+            ### Changed Parameters
+            \`\`\`diff
+            ${{ steps.risk_check.outputs.changed_params }}
+            \`\`\`
+
+            ### Required Actions
+            - [ ] Risk Officer review and approval
+            - [ ] Backtest results with new parameters
+            - [ ] Risk impact assessment documentation
+            - [ ] Approval in Slack #risk-changes channel
+
+            ### Reviewers
+            @risk-officer @cto @lead-quant
+
+            **Note:** This PR will be blocked from merging until risk approval is received.
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
+
+            // Add label
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['risk-param-change', 'requires-risk-approval']
+            });
+
+      - name: Block merge if risk params changed
+        if: steps.risk_check.outputs.risk_params_changed == 'true'
+        run: |
+          echo "::error::Risk parameter changes require Risk Officer approval"
+          echo "Please obtain approval in #risk-changes Slack channel"
+          echo "Add 'risk-approved' label to proceed"
+          exit 1
+
+  check-schema-changes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install jsonschema>=4.19.0
+
+      - name: Check for schema breaking changes
+        id: schema_check
+        run: |
+          echo "Checking for schema breaking changes..."
+
+          # Check if any schema files changed
+          SCHEMA_CHANGES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | grep -E "\.schema\.json$" || true)
+
+          if [ -n "$SCHEMA_CHANGES" ]; then
+            echo "📋 Schema files changed:"
+            echo "$SCHEMA_CHANGES"
+            echo ""
+            echo "Analyzing for breaking changes..."
+
+            # This is a placeholder - full implementation would:
+            # 1. Parse old and new schemas
+            # 2. Check for removed required fields
+            # 3. Check for type changes
+            # 4. Check for enum value removals
+            # 5. Verify backward compatibility
+
+            echo "schema_changed=true" >> $GITHUB_OUTPUT
+            echo "breaking_changes=false" >> $GITHUB_OUTPUT  # TODO: Implement actual check
+
+            # For now, just warn
+            echo "⚠️  Schema validation: To be fully implemented"
+          else
+            echo "✅ No schema changes detected"
+            echo "schema_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR if schemas changed
+        if: steps.schema_check.outputs.schema_changed == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const message = `## 📋 Schema Changes Detected
+
+            This PR modifies data contracts/schemas.
+
+            ### Required Verification
+            - [ ] Schemas are backward compatible
+            - [ ] No breaking changes to existing consumers
+            - [ ] Contract tests pass
+            - [ ] Migration plan documented (if needed)
+
+            ### Review Checklist
+            - [ ] All required fields preserved
+            - [ ] No type changes for existing fields
+            - [ ] Enum values not removed
+            - [ ] Default values provided for new required fields
+
+            **Note:** Breaking schema changes require coordinated deployment.
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
+
+  check-test-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Verify all test types present
+        run: |
+          echo "Checking for test coverage..."
+
+          # Check if PR adds new code but no tests
+          NEW_CODE=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | \
+            grep -E "^(algo_trade|data_plane|order_plane)/.*\.py$" | \
+            grep -v "__init__.py" || true)
+
+          NEW_TESTS=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | \
+            grep -E "^tests/.*\.py$" || true)
+
+          if [ -n "$NEW_CODE" ] && [ -z "$NEW_TESTS" ]; then
+            echo "⚠️  WARNING: New code added but no tests found"
+            echo "Please add appropriate tests for new functionality"
+            echo ""
+            echo "New code files:"
+            echo "$NEW_CODE"
+          else
+            echo "✅ Tests appear to be included with code changes"
+          fi
+
+  verify-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Check for dependency changes
+        id: deps_check
+        run: |
+          if git diff --name-only origin/${{ github.base_ref }}..HEAD | grep -q "requirements"; then
+            echo "deps_changed=true" >> $GITHUB_OUTPUT
+            echo "📦 Requirements files changed"
+          else
+            echo "deps_changed=false" >> $GITHUB_OUTPUT
+            echo "✅ No dependency changes"
+          fi
+
+      - name: Install and check dependencies
+        if: steps.deps_check.outputs.deps_changed == 'true'
+        run: |
+          pip install safety pip-audit
+
+          echo "Running safety check..."
+          safety check --json --output safety-report.json || true
+
+          echo "Running pip-audit..."
+          pip-audit --requirement requirements.txt --format json --output pip-audit-report.json || true
+
+          echo "✅ Dependency security checks complete"
+
+      - name: Upload security reports
+        if: steps.deps_check.outputs.deps_changed == 'true'
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-security-reports
+          path: |
+            safety-report.json
+            pip-audit-report.json
+
+  check-documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Check if docs need update
+        run: |
+          # Check if significant code changes warrant doc updates
+          SIGNIFICANT_CHANGES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | \
+            grep -E "^(algo_trade/core|data_plane|order_plane)/.*\.py$" || true)
+
+          DOC_CHANGES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | \
+            grep -E "\.md$" || true)
+
+          if [ -n "$SIGNIFICANT_CHANGES" ] && [ -z "$DOC_CHANGES" ]; then
+            echo "⚠️  Significant code changes detected, consider updating documentation"
+            echo ""
+            echo "Changed modules:"
+            echo "$SIGNIFICANT_CHANGES"
+            echo ""
+            echo "Recommended docs to review:"
+            echo "- README.md"
+            echo "- QA_PLAN.md"
+            echo "- RUNBOOK.md"
+          else
+            echo "✅ Documentation appears up to date"
+          fi
+
+  governance-summary:
+    needs: [check-risk-params, check-schema-changes, check-test-coverage, verify-dependencies, check-documentation]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Governance checks summary
+        run: |
+          echo "## 🛡️ Governance Gate Summary"
+          echo ""
+          echo "All governance checks completed."
+          echo "Review the individual check results above."
+          echo ""
+          echo "### Next Steps"
+          echo "1. Address any warnings or required approvals"
+          echo "2. Ensure all test suites pass"
+          echo "3. Obtain necessary sign-offs"
+          echo "4. Proceed with merge when all gates are green"

@@ -1,0 +1,277 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ereztash/Algo-trade/contracts/execution_report.schema.json",
+  "title": "ExecutionReport",
+  "description": "Execution report emitted by Order Plane after order fill",
+  "type": "object",
+  "required": [
+    "event_type",
+    "report_id",
+    "intent_id",
+    "order_id",
+    "symbol",
+    "status",
+    "timestamp"
+  ],
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "const": "execution_report",
+      "description": "Event type identifier"
+    },
+    "report_id": {
+      "type": "string",
+      "description": "Unique report identifier (UUID)",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "intent_id": {
+      "type": "string",
+      "description": "Original order intent ID",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "order_id": {
+      "type": "string",
+      "description": "Broker order ID"
+    },
+    "symbol": {
+      "type": "string",
+      "description": "Asset symbol",
+      "minLength": 1,
+      "maxLength": 20
+    },
+    "status": {
+      "type": "string",
+      "description": "Execution status",
+      "enum": [
+        "SUBMITTED",
+        "ACKNOWLEDGED",
+        "PARTIAL_FILL",
+        "FILLED",
+        "CANCELED",
+        "REJECTED",
+        "TIMEOUT",
+        "ERROR"
+      ]
+    },
+    "direction": {
+      "type": "string",
+      "description": "Order direction",
+      "enum": ["BUY", "SELL"]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Report generation timestamp (UTC)"
+    },
+    "submitted_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Order submission timestamp"
+    },
+    "acknowledged_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Broker acknowledgment timestamp"
+    },
+    "filled_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Fill timestamp (for FILLED status)"
+    },
+    "requested_quantity": {
+      "type": "number",
+      "description": "Requested quantity",
+      "exclusiveMinimum": 0
+    },
+    "filled_quantity": {
+      "type": "number",
+      "description": "Filled quantity",
+      "minimum": 0,
+      "default": 0
+    },
+    "remaining_quantity": {
+      "type": "number",
+      "description": "Remaining quantity",
+      "minimum": 0
+    },
+    "average_fill_price": {
+      "type": "number",
+      "description": "Average fill price",
+      "exclusiveMinimum": 0
+    },
+    "limit_price": {
+      "type": "number",
+      "description": "Original limit price (if applicable)",
+      "exclusiveMinimum": 0
+    },
+    "commission": {
+      "type": "number",
+      "description": "Total commission paid",
+      "minimum": 0,
+      "default": 0
+    },
+    "slippage_bps": {
+      "type": "number",
+      "description": "Slippage in basis points"
+    },
+    "execution_costs": {
+      "type": "object",
+      "description": "Execution cost breakdown",
+      "properties": {
+        "commission": {
+          "type": "number",
+          "minimum": 0
+        },
+        "slippage": {
+          "type": "number"
+        },
+        "market_impact": {
+          "type": "number"
+        },
+        "total_cost_bps": {
+          "type": "number",
+          "description": "Total cost in basis points"
+        }
+      }
+    },
+    "reject_reason": {
+      "type": "string",
+      "description": "Rejection reason (if status=REJECTED)"
+    },
+    "error_message": {
+      "type": "string",
+      "description": "Error message (if status=ERROR)"
+    },
+    "fills": {
+      "type": "array",
+      "description": "Individual fill records (for partial fills)",
+      "items": {
+        "type": "object",
+        "required": ["fill_id", "quantity", "price", "timestamp"],
+        "properties": {
+          "fill_id": {
+            "type": "string",
+            "description": "Individual fill ID"
+          },
+          "quantity": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "price": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "commission": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "latency_metrics": {
+      "type": "object",
+      "description": "Latency metrics",
+      "properties": {
+        "intent_to_submit_ms": {
+          "type": "integer",
+          "description": "Intent → Submit latency (ms)",
+          "minimum": 0
+        },
+        "submit_to_ack_ms": {
+          "type": "integer",
+          "description": "Submit → Ack latency (ms)",
+          "minimum": 0
+        },
+        "ack_to_fill_ms": {
+          "type": "integer",
+          "description": "Ack → Fill latency (ms)",
+          "minimum": 0
+        },
+        "total_latency_ms": {
+          "type": "integer",
+          "description": "Total latency (ms)",
+          "minimum": 0
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata",
+      "properties": {
+        "broker": {
+          "type": "string",
+          "description": "Broker name",
+          "default": "IBKR"
+        },
+        "account_id": {
+          "type": "string",
+          "description": "Trading account ID"
+        },
+        "kafka_topic": {
+          "type": "string",
+          "description": "Kafka topic",
+          "default": "exec_reports"
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "event_type": "execution_report",
+      "report_id": "660e8400-e29b-41d4-a716-446655440001",
+      "intent_id": "550e8400-e29b-41d4-a716-446655440000",
+      "order_id": "IBKR_12345678",
+      "symbol": "TSLA",
+      "status": "FILLED",
+      "direction": "BUY",
+      "timestamp": "2025-11-07T14:30:05.500Z",
+      "submitted_timestamp": "2025-11-07T14:30:00.100Z",
+      "acknowledged_timestamp": "2025-11-07T14:30:00.250Z",
+      "filled_timestamp": "2025-11-07T14:30:05.450Z",
+      "requested_quantity": 100,
+      "filled_quantity": 100,
+      "remaining_quantity": 0,
+      "average_fill_price": 245.52,
+      "limit_price": 245.50,
+      "commission": 1.50,
+      "slippage_bps": 0.8,
+      "execution_costs": {
+        "commission": 1.50,
+        "slippage": 2.00,
+        "market_impact": 0.50,
+        "total_cost_bps": 1.63
+      },
+      "fills": [
+        {
+          "fill_id": "FILL_001",
+          "quantity": 50,
+          "price": 245.50,
+          "timestamp": "2025-11-07T14:30:02.100Z",
+          "commission": 0.75
+        },
+        {
+          "fill_id": "FILL_002",
+          "quantity": 50,
+          "price": 245.54,
+          "timestamp": "2025-11-07T14:30:05.450Z",
+          "commission": 0.75
+        }
+      ],
+      "latency_metrics": {
+        "intent_to_submit_ms": 100,
+        "submit_to_ack_ms": 150,
+        "ack_to_fill_ms": 5200,
+        "total_latency_ms": 5450
+      },
+      "metadata": {
+        "broker": "IBKR",
+        "account_id": "U1234567",
+        "kafka_topic": "exec_reports"
+      }
+    }
+  ]
+}

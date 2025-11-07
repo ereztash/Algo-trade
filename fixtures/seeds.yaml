@@ -1,0 +1,75 @@
+# Random Seeds for Deterministic Testing
+# DO NOT MODIFY without updating golden files and re-running baseline tests
+# Last updated: 2025-11-07
+
+# Global Seeds
+global_seed: 42
+numpy_seed: 42
+random_seed: 42
+torch_seed: 42  # If using PyTorch in the future
+
+# Module-specific seeds (isolated random state per module)
+seeds:
+  signals: 1001
+  ofi_signal: 1001
+  ern_signal: 1002
+  vrp_signal: 1003
+  pos_signal: 1004
+  tsx_signal: 1005
+  sif_signal: 1006
+
+  qp_solver: 1010
+  risk: 1020
+  drawdown: 1021
+  covariance: 1022
+  regime_detection: 1023
+
+  simulation: 1030
+  validation: 1040
+  cross_validation: 1041
+  overfitting: 1042
+
+  ensemble: 1050
+  gate_linucb: 1060
+
+  # Testing-specific seeds
+  metamorphic: 2000
+  metamorphic_scaling: 2001
+  metamorphic_timeshift: 2002
+  metamorphic_noise: 2003
+  metamorphic_tail: 2004
+
+  chaos: 3000
+  chaos_network: 3001
+  chaos_latency: 3002
+  chaos_exception: 3003
+  chaos_message_loss: 3004
+
+# Fixture generation seeds
+fixture_seeds:
+  market_data: 5001
+  market_data_spy: 5001
+  market_data_tsla: 5002
+  market_data_esh25: 5003
+  market_data_eurusd: 5004
+  market_data_btc: 5005
+  market_data_tlt: 5006
+
+  synthetic_prices: 5010
+  synthetic_returns: 5011
+  synthetic_volume: 5012
+
+  order_flow: 5020
+  order_intents: 5021
+  execution_reports: 5022
+
+# Hypothesis Property-Based Testing Seeds
+hypothesis_seed: 42
+hypothesis_profile: "default"  # Options: default, dev, ci
+
+# Notes:
+# - All seeds are fixed for reproducibility
+# - Seeds are derived from a master seed (42) for consistency
+# - Each module has isolated random state
+# - Changing seeds requires regenerating golden files
+# - Use pytest --randomly-seed=42 for additional randomization control
