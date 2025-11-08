@@ -1,0 +1,412 @@
+name: Security Gates
+
+on:
+  pull_request:
+    branches: [main, develop, "claude/**"]
+  push:
+    branches: [main, develop]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  # ============================================================================
+  # JOB 1: Secrets Detection (TruffleHog + gitleaks)
+  # ============================================================================
+  secrets-detection:
+    name: 🔍 Secrets Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for TruffleHog
+
+      - name: TruffleHog Scan (Verified Secrets)
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified --fail
+
+      - name: Gitleaks Scan (All Patterns)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comment on PR if secrets found
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🚨 **SECURITY ALERT: Secrets Detected**\n\nSecrets or credentials were found in this PR. Please remove them immediately and rotate any compromised credentials.\n\n**Next Steps:**\n1. Remove secrets from code\n2. Add secrets to `.env.local` (git-ignored)\n3. If committed to history, contact Security team to rotate\n4. Use AWS Secrets Manager for production secrets'
+            })
+
+  # ============================================================================
+  # JOB 2: Dependency Scanning (Snyk + safety + pip-audit)
+  # ============================================================================
+  dependency-scanning:
+    name: 📦 Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety pip-audit
+
+      - name: Safety check (Known vulnerabilities)
+        run: |
+          # Check requirements.txt for known vulnerabilities
+          if [ -f requirements.txt ]; then
+            echo "🔍 Scanning requirements.txt with safety..."
+            safety check --file requirements.txt --output text || exit 1
+          fi
+
+      - name: pip-audit (PyPI vulnerabilities)
+        run: |
+          if [ -f requirements.txt ]; then
+            echo "🔍 Scanning with pip-audit..."
+            pip-audit --requirement requirements.txt --format json --output pip-audit-report.json || exit 1
+          fi
+
+      - name: Upload pip-audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: pip-audit-report.json
+
+      - name: Snyk Security Scan
+        uses: snyk/actions/python@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --fail-on=all
+
+      - name: Comment on PR if vulnerabilities found
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '⚠️ **Dependency Vulnerabilities Detected**\n\nHigh or critical severity vulnerabilities were found in dependencies.\n\n**Action Required:**\n1. Review the security scan results above\n2. Update vulnerable packages to patched versions\n3. If no patch available, consider alternative packages or mitigation'
+            })
+
+  # ============================================================================
+  # JOB 3: IAM Policy Validation (Least Privilege Checks)
+  # ============================================================================
+  iam-policy-validation:
+    name: 🔐 IAM Policy Validation
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.changed_files, 'iam/') || contains(github.event.pull_request.changed_files, 'terraform/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Create IAM policy validator script
+        run: |
+          cat > validate_iam_policies.py << 'EOF'
+          #!/usr/bin/env python3
+          import json
+          import sys
+          import glob
+
+          def validate_iam_policy(policy_json):
+              violations = []
+              policy = json.loads(policy_json)
+
+              for statement in policy.get('Statement', []):
+                  sid = statement.get('Sid', 'unnamed')
+
+                  # Check 1: Resource wildcards
+                  resources = statement.get('Resource', [])
+                  if isinstance(resources, str):
+                      resources = [resources]
+                  if "*" in resources:
+                      violations.append(f"VIOLATION: Resource wildcard in {sid}")
+
+                  # Check 2: Action wildcards
+                  actions = statement.get('Action', [])
+                  if isinstance(actions, str):
+                      actions = [actions]
+                  for action in actions:
+                      if action == "*" or action.endswith(":*"):
+                          violations.append(f"VIOLATION: Action wildcard in {sid}: {action}")
+
+                  # Check 3: Missing Condition on broad statements
+                  conditions = statement.get('Condition')
+                  if not conditions and len(actions) > 5:
+                      violations.append(f"WARNING: No Condition in {sid} with {len(actions)} actions")
+
+                  # Check 4: Principal wildcards
+                  principal = statement.get('Principal')
+                  if principal == "*":
+                      violations.append(f"VIOLATION: Principal wildcard in {sid}")
+
+              return violations
+
+          if __name__ == "__main__":
+              policy_files = glob.glob('iam/policies/**/*.json', recursive=True)
+
+              if not policy_files:
+                  print("✓ No IAM policy files found to validate")
+                  sys.exit(0)
+
+              all_violations = []
+              for policy_file in policy_files:
+                  print(f"\n🔍 Validating {policy_file}...")
+                  with open(policy_file, 'r') as f:
+                      policy = f.read()
+                  violations = validate_iam_policy(policy)
+
+                  if violations:
+                      print(f"  ❌ Found {len(violations)} issue(s):")
+                      for v in violations:
+                          print(f"    - {v}")
+                      all_violations.extend(violations)
+                  else:
+                      print(f"  ✓ Policy passed validation")
+
+              if all_violations:
+                  critical = [v for v in all_violations if "VIOLATION" in v]
+                  if critical:
+                      print(f"\n❌ FAILED: Found {len(critical)} critical violation(s)")
+                      sys.exit(1)
+                  else:
+                      print(f"\n⚠️  Found {len(all_violations)} warning(s), but no blocking issues")
+              else:
+                  print("\n✓ All IAM policies passed validation")
+          EOF
+          chmod +x validate_iam_policies.py
+
+      - name: Validate IAM policies
+        run: |
+          python validate_iam_policies.py
+
+      - name: AWS Access Analyzer validation (if AWS creds available)
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          # Install AWS CLI
+          pip install awscli
+
+          # Validate each policy with AWS Access Analyzer
+          for policy in iam/policies/*.json; do
+            if [ -f "$policy" ]; then
+              echo "🔍 Running AWS Access Analyzer on $policy..."
+              aws accessanalyzer validate-policy \
+                --policy-document file://"$policy" \
+                --policy-type IDENTITY_POLICY \
+                --locale EN || exit 1
+            fi
+          done
+
+  # ============================================================================
+  # JOB 4: Container Security Scan (Trivy)
+  # ============================================================================
+  container-scanning:
+    name: 🐳 Container Security Scan
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.changed_files, 'Dockerfile') || github.event_name == 'schedule'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image (if Dockerfile exists)
+        run: |
+          if [ -f Dockerfile ]; then
+            docker build -t algo-trade:${{ github.sha }} .
+          else
+            echo "⚠️  No Dockerfile found, skipping container scan"
+            exit 0
+          fi
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'algo-trade:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Comment on PR if vulnerabilities found
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🐳 **Container Vulnerabilities Detected**\n\nCritical or high severity vulnerabilities were found in the Docker image.\n\n**Action Required:**\n1. Review Trivy scan results in the Security tab\n2. Update base image to latest patched version\n3. Update vulnerable packages in Dockerfile'
+            })
+
+  # ============================================================================
+  # JOB 5: Code Security Scan (Bandit for Python)
+  # ============================================================================
+  code-security-scan:
+    name: 🔒 Static Security Analysis (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Bandit
+        run: |
+          pip install bandit[toml]
+
+      - name: Run Bandit security linter
+        run: |
+          bandit -r . \
+            -f json \
+            -o bandit-report.json \
+            --severity-level medium \
+            --confidence-level medium \
+            --exclude ./tests,./venv || true
+
+      - name: Display Bandit results
+        run: |
+          if [ -f bandit-report.json ]; then
+            cat bandit-report.json
+
+            # Check if high or critical issues found
+            HIGH_COUNT=$(jq '[.results[] | select(.issue_severity == "HIGH" or .issue_severity == "CRITICAL")] | length' bandit-report.json)
+
+            if [ "$HIGH_COUNT" -gt 0 ]; then
+              echo "❌ Found $HIGH_COUNT high/critical security issues"
+              exit 1
+            else
+              echo "✓ No high/critical security issues found"
+            fi
+          fi
+
+      - name: Upload Bandit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-security-report
+          path: bandit-report.json
+
+  # ============================================================================
+  # JOB 6: License Compliance Check
+  # ============================================================================
+  license-check:
+    name: 📜 License Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install pip-licenses
+        run: |
+          pip install pip-licenses
+
+      - name: Check for incompatible licenses
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+
+            # Check for GPL/AGPL licenses (may require source disclosure)
+            echo "🔍 Checking for restrictive licenses..."
+            pip-licenses --format=json > licenses.json
+
+            # Fail if GPL/AGPL found (adjust based on your policy)
+            RESTRICTED=$(jq '[.[] | select(.License | contains("GPL") or contains("AGPL"))] | length' licenses.json)
+
+            if [ "$RESTRICTED" -gt 0 ]; then
+              echo "⚠️  Found $RESTRICTED package(s) with GPL/AGPL licenses"
+              echo "Review licenses.json for details"
+              jq '[.[] | select(.License | contains("GPL") or contains("AGPL"))]' licenses.json
+              # WARNING only, not failing (adjust as needed)
+            else
+              echo "✓ No restrictive licenses found"
+            fi
+          fi
+
+      - name: Upload license report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: licenses.json
+
+  # ============================================================================
+  # JOB 7: Security Summary Report
+  # ============================================================================
+  security-summary:
+    name: 📊 Security Summary
+    runs-on: ubuntu-latest
+    needs: [secrets-detection, dependency-scanning, code-security-scan]
+    if: always()
+    steps:
+      - name: Generate security summary
+        run: |
+          echo "# Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Scan Date:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔍 Secrets Detection | ${{ needs.secrets-detection.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Dependency Scan | ${{ needs.dependency-scanning.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🔒 Code Security | ${{ needs.code-security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Determine overall status
+          if [[ "${{ needs.secrets-detection.result }}" == "failure" ]] || \
+             [[ "${{ needs.dependency-scanning.result }}" == "failure" ]] || \
+             [[ "${{ needs.code-security-scan.result }}" == "failure" ]]; then
+            echo "## ❌ Security Gates FAILED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "One or more security checks failed. Please review the job logs and remediate before merging." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "## ✅ All Security Gates PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All security checks passed successfully." >> $GITHUB_STEP_SUMMARY
+          fi
