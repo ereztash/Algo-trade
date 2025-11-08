@@ -1,0 +1,296 @@
+# Monitoring & Alerting Configuration
+# ====================================
+#
+# Configuration for Prometheus metrics, Grafana dashboards, and alerting channels.
+# Used by metrics_exporter.py and alerting.py
+
+# ============================================================================
+# Prometheus Metrics
+# ============================================================================
+
+metrics:
+  # HTTP port for /metrics endpoint
+  port: 8000
+
+  # Metric namespace prefix
+  namespace: "algo_trade"
+
+  # Update intervals (seconds)
+  update_intervals:
+    system_health: 10      # CPU, memory, throughput
+    performance: 60        # P&L, Sharpe, drawdown
+    risk: 30               # Exposure, volatility, VaR
+    data_quality: 30       # Completeness, staleness
+
+  # Enable/disable metric categories
+  enabled_categories:
+    latency: true
+    performance: true
+    risk: true
+    orders: true
+    errors: true
+    system_health: true
+    data_quality: true
+    strategy: true
+    ibkr: true
+
+# ============================================================================
+# Alerting Configuration
+# ============================================================================
+
+alerting:
+  # Slack Integration
+  slack_webhook_url: ""  # Set via environment variable: SLACK_WEBHOOK_URL
+  slack_channel: "#algo-trade-alerts"
+
+  # Email Integration (SMTP)
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  smtp_user: ""  # Set via environment variable: SMTP_USER
+  smtp_password: ""  # Set via environment variable: SMTP_PASSWORD
+  email_from: "algo-trade@example.com"
+  email_to:
+    - "trader@example.com"
+    - "devops@example.com"
+
+  # PagerDuty Integration (Optional - for P0/P1 alerts)
+  pagerduty_api_key: ""  # Set via environment variable: PAGERDUTY_API_KEY
+  pagerduty_service_id: ""
+
+  # Rate Limiting (prevent alert fatigue)
+  rate_limit_window_seconds: 300  # 5 minutes
+  rate_limit_max_alerts: 10  # Max 10 alerts per severity per window
+
+  # Aggregation (bundle low-priority alerts)
+  aggregation_window_seconds: 60  # 1 minute
+  enable_aggregation: true
+
+  # On-call Schedule
+  oncall_trader_hours: "09:00-18:00 UTC"  # Trading hours
+  oncall_security_hours: "00:00-23:59 UTC"  # 24/7 security
+
+  # Escalation Policies
+  escalation_p0_minutes: 5   # Escalate P0 if not acked in 5 min
+  escalation_p1_minutes: 60  # Escalate P1 if not acked in 1 hour
+
+# ============================================================================
+# Alert Thresholds (from PRE_LIVE_CHECKLIST.md)
+# ============================================================================
+
+alert_thresholds:
+  # Latency Thresholds (milliseconds)
+  latency:
+    intent_to_ack_p50: 50
+    intent_to_ack_p95: 200
+    intent_to_ack_p99: 500
+    order_fill_p95: 5000  # 5 seconds
+
+  # Performance Thresholds
+  performance:
+    pnl_kill_switch: -0.05  # -5% cumulative PnL
+    max_drawdown_kill_switch: 0.15  # 15% drawdown
+    psr_kill_switch: 0.20  # PSR < 0.20
+    sharpe_ratio_warning: 0.5  # Sharpe < 0.5
+    sharpe_ratio_critical: 0.0  # Sharpe < 0.0
+
+  # Risk Thresholds
+  risk:
+    gross_exposure_max:
+      calm: 2.5
+      normal: 2.0
+      storm: 1.0
+    net_exposure_max:
+      calm: 1.0
+      normal: 0.8
+      storm: 0.4
+    portfolio_volatility_max: 0.20  # 20% annualized
+    largest_position_pct_max: 0.30  # 30% of portfolio
+    var_95_max: 0.10  # 10% VaR
+
+  # Data Quality Thresholds
+  data_quality:
+    completeness_min: 0.95  # 95% completeness
+    staleness_max_seconds: 60  # 1 minute max staleness
+    missing_ticks_per_hour_max: 10
+    data_gaps_per_hour_max: 5
+
+  # System Health Thresholds
+  system_health:
+    cpu_usage_warning: 70  # 70% CPU
+    cpu_usage_critical: 90  # 90% CPU
+    memory_usage_warning_mb: 8192  # 8 GB
+    memory_usage_critical_mb: 12288  # 12 GB
+    throughput_min_msg_per_sec: 10
+
+  # IBKR Thresholds
+  ibkr:
+    pacing_violations_per_hour_max: 3
+    api_rate_max: 45  # 45 requests/sec (below 50/sec limit)
+    connection_errors_per_hour_max: 2
+
+  # Error Thresholds
+  errors:
+    total_errors_per_hour_max: 10
+    optimization_failures_per_hour_max: 2
+
+# ============================================================================
+# Grafana Dashboard Configuration
+# ============================================================================
+
+grafana:
+  # Grafana server
+  url: "http://localhost:3000"
+  api_key: ""  # Set via environment variable: GRAFANA_API_KEY
+
+  # Data source
+  prometheus_datasource: "Prometheus"
+
+  # Dashboard refresh intervals
+  refresh_intervals:
+    system_health: "10s"
+    strategy_performance: "1m"
+    risk_monitor: "30s"
+    data_quality: "30s"
+
+  # Dashboard time ranges (default)
+  default_time_range: "last 6 hours"
+
+  # Dashboard panels (what to include)
+  panels:
+    system_health:
+      - cpu_usage
+      - memory_usage
+      - throughput
+      - active_positions
+      - error_rate
+      - latency_p50_p95_p99
+
+    strategy_performance:
+      - pnl_cumulative
+      - pnl_daily
+      - sharpe_ratio_30d
+      - sharpe_ratio_90d
+      - win_rate
+      - profit_factor
+      - max_drawdown
+
+    risk_monitor:
+      - gross_exposure
+      - net_exposure
+      - portfolio_volatility
+      - largest_position
+      - var_95
+      - cvar_95
+      - kill_switches_status
+      - market_regime
+
+    data_quality:
+      - data_completeness
+      - data_staleness
+      - missing_ticks_rate
+      - data_gaps_rate
+      - ibkr_connection_status
+      - ibkr_pacing_violations
+
+# ============================================================================
+# Runbook URLs (for alert templates)
+# ============================================================================
+
+runbooks:
+  base_url: "https://docs.example.com/runbooks"
+
+  paths:
+    kill_switch: "/kill-switch"
+    ibkr_connection: "/ibkr-connection"
+    high_latency: "/high-latency"
+    data_quality: "/data-quality"
+    optimization_failure: "/optimization-failure"
+    system_health: "/system-health"
+    risk_breach: "/risk-breach"
+
+# ============================================================================
+# Monitoring Schedule
+# ============================================================================
+
+monitoring_schedule:
+  # When to collect/update metrics
+  trading_hours:
+    start: "09:30"  # Market open (UTC-5 for US markets)
+    end: "16:00"    # Market close
+    timezone: "America/New_York"
+
+  # Extended monitoring (outside trading hours)
+  always_monitor:
+    - system_health
+    - ibkr_connection
+    - data_quality
+    - security_events
+
+  # Alerting schedule
+  alert_hours:
+    p0_alerts: "24/7"  # Always send P0
+    p1_alerts: "24/7"  # Always send P1
+    p2_alerts: "trading_hours"  # Only during trading hours
+    info_alerts: "trading_hours"  # Only during trading hours
+
+# ============================================================================
+# Data Retention
+# ============================================================================
+
+retention:
+  # Prometheus retention
+  prometheus_retention_days: 90
+
+  # Metrics granularity over time
+  downsampling:
+    raw: "7 days"      # Keep raw metrics for 7 days
+    1min_avg: "30 days"  # Keep 1-min averages for 30 days
+    5min_avg: "90 days"  # Keep 5-min averages for 90 days
+
+  # Alert history retention
+  alert_history_days: 365  # 1 year
+
+# ============================================================================
+# Feature Flags
+# ============================================================================
+
+features:
+  # Enable/disable monitoring features
+  enable_metrics_export: true
+  enable_alerting: true
+  enable_pagerduty: false  # Set true for production
+  enable_slack: true
+  enable_email: true
+
+  # Advanced features
+  enable_alert_aggregation: true
+  enable_rate_limiting: true
+  enable_metric_downsampling: true
+  enable_alert_escalation: false  # Set true for production
+
+# ============================================================================
+# Environment-Specific Overrides
+# ============================================================================
+
+# Development environment
+dev:
+  metrics:
+    port: 8001
+  alerting:
+    enable_aggregation: false
+    slack_channel: "#algo-trade-dev"
+  alert_thresholds:
+    latency:
+      intent_to_ack_p95: 1000  # More lenient in dev
+
+# Production environment
+production:
+  metrics:
+    port: 8000
+  features:
+    enable_pagerduty: true
+    enable_alert_escalation: true
+  alert_thresholds:
+    # Use stricter thresholds in production
+    latency:
+      intent_to_ack_p95: 150
