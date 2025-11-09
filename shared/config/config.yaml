@@ -1,0 +1,43 @@
+# 3-Plane Trading System Configuration
+# This file drives ALL behavior across Data/Control/Execution planes
+# Mode: dry (testing) | prelive (paper) | live (real trading)
+
+# Orchestrator Settings
+mode: dry
+symbols:
+  - AAPL
+  - SPY
+  - TLT
+
+# Event Logging
+event_log_path: reports/events.jsonl
+
+# Risk Management
+enable_risk_checks: true
+
+# Performance
+sleep_between_ticks: 0.0  # seconds (0 = no delay for fast dry-runs)
+
+# Data Source (Phase 3)
+# data_source:
+#   type: csv  # csv | feed_stub | live
+#   path: fixtures/bars_sample.parquet
+
+# Strategy (Phase 3)
+# strategy:
+#   type: mean_reversion
+#   lookback: 20
+#   z_threshold: 2.0
+
+# Broker (Phase 3)
+# broker:
+#   type: paper  # paper | ibkr
+#   commission: 1.0
+#   slippage_std: 0.02
+
+# Risk Limits (Phase 4)
+# risk:
+#   daily_drawdown_limit: -0.05  # -5%
+#   max_position_size: 0.20      # 20% of portfolio
+#   max_leverage: 1.0
+#   psr_threshold: 0.95

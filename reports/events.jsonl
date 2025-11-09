@@ -1,0 +1,2 @@
+{"event_type": "START", "timestamp": "2025-11-09T07:58:56.945835+00:00", "metadata": {"mode": "dry", "symbols": ["AAPL", "SPY", "TLT"], "max_iterations": 1}}
+{"event_type": "SHUTDOWN", "timestamp": "2025-11-09T07:58:56.946709+00:00", "reason": "NORMAL", "uptime_seconds": 0.000868, "metadata": {"total_signals": 0, "total_orders": 0, "total_iterations": 1}}
