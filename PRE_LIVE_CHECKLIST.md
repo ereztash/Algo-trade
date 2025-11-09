@@ -271,44 +271,132 @@
 
 ---
 
-### 9. Security & Compliance (60 נקודות)
+### 9. Security & Compliance (150 נקודות)
 
-#### 9.1 Security
-- [ ] TLS/SSL enabled for all connections
-- [ ] Encryption at rest enabled
-- [ ] Network firewall configured
-- [ ] Access logs enabled
-- [ ] Intrusion detection configured
-- [ ] Penetration testing completed
+#### 9.1 Security Strategy & Threat Model
+- [ ] **SECURITY_EXECUTION_SUMMARY.md** reviewed and approved
+- [ ] Compliance framework defined (SOC 2 Type II baseline)
+- [ ] Threat model documented (Insider-threat-first)
+- [ ] Attack vectors ranked and mitigated
+- [ ] Security event definitions documented (4 severity levels)
+- [ ] Incident response playbook tested (≤30 days)
 
-**Score:** ____/6
+**Score:** ____/6 (100% required)
 
-#### 9.2 Compliance (if applicable)
-- [ ] MiFID II compliance (if EU)
-- [ ] SEC compliance (if US)
-- [ ] Audit trail complete
-- [ ] Trade reporting configured
-- [ ] Record retention policy defined
-- [ ] Compliance review completed
+#### 9.2 Secrets Management
+- [ ] AWS Secrets Manager configured (or HashiCorp Vault)
+- [ ] No secrets in code/env files (validated via gitleaks)
+- [ ] Secrets rotation policy: Prod (30d), Paper (90d)
+- [ ] Runtime-only secret injection (never build-time)
+- [ ] Secret access audit trail enabled (2-year retention)
+- [ ] Secrets detection in CI/CD (TruffleHog + gitleaks)
+- [ ] Log sanitization tested (no API keys/passwords in logs)
 
-**Score:** ____/6 (if applicable)
+**Score:** ____/7 (100% required)
+
+#### 9.3 Identity & Access Management (IAM)
+- [ ] **IAM_POLICY_FRAMEWORK.md** reviewed and approved
+- [ ] 5 roles defined: Trader, DevOps, QA, Service, Governance
+- [ ] Permission matrix documented and validated
+- [ ] Just-In-Time (JIT) access configured (15-min approval window)
+- [ ] Least privilege validation in CI/CD
+- [ ] Governance approval workflow for permission escalations
+- [ ] Service accounts use STS temporary credentials (1-hour TTL)
+- [ ] IAM policy linter passing (no wildcard resources/actions)
+
+**Score:** ____/8 (100% required)
+
+#### 9.4 Encryption & Keys
+- [ ] TLS 1.3 enforced for all external connections
+- [ ] Cipher suites whitelisted (AES-256-GCM, ChaCha20)
+- [ ] Digital signatures: Ed25519 for orders, ECDSA-P384 for code
+- [ ] Key rotation: 90-day schedule with 15-min grace period
+- [ ] Encryption at rest: AES-256 (RDS, S3, CloudWatch Logs)
+- [ ] Key lifecycle management documented
+- [ ] File integrity verification (SHA-256 + Ed25519 signatures)
+
+**Score:** ____/7 (100% required)
+
+#### 9.5 Security Monitoring & Observability
+- [ ] Security event log schema validated
+- [ ] SIEM configured (Datadog or ELK Stack)
+- [ ] 4-level alert severity matrix implemented
+- [ ] Alert thresholds configured (P0: <5min, P1: <1hour)
+- [ ] Event correlation rules defined (≥5 rules)
+- [ ] On-call rotation scheduled (Trader: 9-18 UTC, Security: 24/7)
+- [ ] Data retention policy: Critical (2yr), Sensitive (1yr), Routine (7d)
+- [ ] Log purge automation tested
+
+**Score:** ____/8 (100% required)
+
+#### 9.6 CI/CD Security Gates
+- [ ] GitHub Actions security gates enabled
+- [ ] Secrets detection: TruffleHog + gitleaks (blocking)
+- [ ] Dependency scanning: Snyk + safety + pip-audit
+- [ ] Container scanning: Trivy for Docker images
+- [ ] Code security: Bandit for Python (no high/critical issues)
+- [ ] IAM policy validation: Automated least privilege checks
+- [ ] Pre-commit hooks configured (detect-secrets)
+- [ ] License compliance check (no GPL/AGPL violations)
+
+**Score:** ____/8 (100% required)
+
+#### 9.7 Compliance & Audit (if applicable)
+- [ ] SOC 2 Type II baseline requirements met
+- [ ] MiFID II compliance (if EU trading)
+- [ ] Audit trail complete (2-year retention)
+- [ ] Trade reporting configured (if required)
+- [ ] Record retention policy defined and automated
+- [ ] Monthly compliance reports generated
+- [ ] Governance sign-offs obtained (CTO, Security, Governance Officer)
+
+**Score:** ____/7 (if applicable)
+
+#### 9.8 Penetration Testing & Security Audit
+- [ ] Security framework reviewed by external auditor
+- [ ] Red-team exercise: Extract API key from logs (should fail)
+- [ ] Simulation: Malicious dependency update (should trigger alert)
+- [ ] Stress test: 100 failed login attempts (should trigger lockout)
+- [ ] Chaos test: Kill IBKR connection mid-trade (should reconnect)
+- [ ] JIT access approval workflow tested
+- [ ] Kill-switch activation tested (emergency halt)
+- [ ] Rollback procedure tested (<30s recovery)
+
+**Score:** ____/8 (100% required)
+
+**Total Security Score:** ____/59 (100% required for sections 9.1-9.6, 9.8)
 
 ---
 
-### 10. Documentation (50 נקודות)
+### 10. Documentation (70 נקודות)
 
+#### 10.1 Core Documentation
 - [ ] README.md up to date
 - [ ] ARCHITECTURE.md complete
 - [ ] RUNBOOK.md complete
 - [ ] PRE_LIVE_CHECKLIST.md (this document)
 - [ ] API documentation (Sphinx)
+
+**Score:** ____/5 (100% required)
+
+#### 10.2 Security Documentation
+- [ ] **SECURITY_EXECUTION_SUMMARY.md** complete
+- [ ] **IAM_POLICY_FRAMEWORK.md** complete
+- [ ] **SECRETS_MANAGEMENT_POLICY.md** complete (optional for Phase 1)
+- [ ] **ENCRYPTION_KEY_POLICY.md** complete (optional for Phase 1)
+- [ ] **SECURITY_MONITORING_POLICY.md** complete (optional for Phase 1)
+
+**Score:** ____/5 (SECURITY_EXECUTION_SUMMARY.md + IAM_POLICY_FRAMEWORK.md required)
+
+#### 10.3 Operational Documentation
 - [ ] Configuration guide
 - [ ] Troubleshooting guide
 - [ ] Incident response procedures
 - [ ] Change management process
-- [ ] Runbook reviewed by team
+- [ ] Rollback procedure (ROLLBACK_PROCEDURE.md)
+- [ ] On-call runbook
 
-**Score:** ____/10 (100% required)
+**Score:** ____/6 (100% required)
 
 ---
 
@@ -316,19 +404,20 @@
 
 | Category | Score | Weight | Weighted Score |
 |----------|-------|--------|----------------|
-| 1. Code Quality & Testing | ___/19 | 15% | ___ |
-| 2. Configuration & Secrets | ___/12 | 10% | ___ |
-| 3. IBKR Integration | ___/18 | 15% | ___ |
-| 4. Data Pipeline | ___/12 | 10% | ___ |
-| 5. Algorithms & Strategies | ___/18 | 20% | ___ |
-| 6. Risk Management | ___/9 | 15% | ___ |
-| 7. Monitoring & Observability | ___/19 | 10% | ___ |
-| 8. Infrastructure & Deployment | ___/18 | 10% | ___ |
-| 9. Security & Compliance | ___/12 | 5% | ___ |
-| 10. Documentation | ___/10 | 5% | ___ |
+| 1. Code Quality & Testing | ___/19 | 12% | ___ |
+| 2. Configuration & Secrets | ___/12 | 8% | ___ |
+| 3. IBKR Integration | ___/18 | 12% | ___ |
+| 4. Data Pipeline | ___/12 | 8% | ___ |
+| 5. Algorithms & Strategies | ___/18 | 15% | ___ |
+| 6. Risk Management | ___/9 | 12% | ___ |
+| 7. Monitoring & Observability | ___/19 | 8% | ___ |
+| 8. Infrastructure & Deployment | ___/18 | 8% | ___ |
+| **9. Security & Compliance** | **___/59** | **15%** | **___** |
+| 10. Documentation | ___/16 | 5% | ___ |
 | **TOTAL** | | **100%** | **___** |
 
 **Minimum passing score: 95/100**
+**Security is now 15% of total score** (reflecting critical importance for Go-Live)
 
 ---
 
@@ -345,6 +434,7 @@ _______________________________________________________________________
 | Role | Name | Signature | Date |
 |------|------|-----------|------|
 | CTO | ____________ | ____________ | ________ |
+| **Security Officer** | ____________ | ____________ | ________ |
 | Risk Officer | ____________ | ____________ | ________ |
 | Lead Quant | ____________ | ____________ | ________ |
 | DevOps Lead | ____________ | ____________ | ________ |
