@@ -4,3 +4,6 @@ cvxpy
 pyyaml
 scipy
 scikit-learn
+pydantic>=2.0.0
+python-dateutil
+pyarrow

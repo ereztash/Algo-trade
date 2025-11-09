@@ -1,0 +1,142 @@
+{
+  "description": "Sample fixtures for all 3-plane trading system models. Use for testing and validation.",
+  "metadata": {
+    "created": "2025-11-09",
+    "schema_version": 1,
+    "purpose": "Model validation and integration testing"
+  },
+  "samples": {
+    "bar": {
+      "schema_version": 1,
+      "timestamp": "2025-01-15T14:30:00+00:00",
+      "symbol": "AAPL",
+      "open": 150.25,
+      "high": 152.75,
+      "low": 149.50,
+      "close": 151.80,
+      "volume": 5000000.0,
+      "interval": "1D"
+    },
+    "quote": {
+      "schema_version": 1,
+      "timestamp": "2025-01-15T14:30:00+00:00",
+      "symbol": "SPY",
+      "bid": 450.10,
+      "ask": 450.15,
+      "bid_size": 100.0,
+      "ask_size": 200.0,
+      "exchange": "NASDAQ"
+    },
+    "trade_tick": {
+      "schema_version": 1,
+      "timestamp": "2025-01-15T14:30:00+00:00",
+      "symbol": "TSLA",
+      "price": 250.50,
+      "size": 50.0,
+      "side": "BUY",
+      "exchange": "NASDAQ",
+      "trade_id": "TX123456"
+    },
+    "signal": {
+      "schema_version": 1,
+      "timestamp": "2025-01-15T14:30:00+00:00",
+      "symbol": "AAPL",
+      "direction": "LONG",
+      "confidence": 0.75,
+      "rationale": "SMA crossover: 50-day > 200-day, RSI oversold",
+      "strategy_id": "mean_reversion_v1",
+      "target_weight": 0.5,
+      "stop_loss": 140.0,
+      "take_profit": 170.0,
+      "metadata": {
+        "sma_50": 148.5,
+        "sma_200": 145.0,
+        "rsi": 32.5
+      }
+    },
+    "allocation": {
+      "symbol": "AAPL",
+      "weight": 0.4,
+      "conviction": 0.8,
+      "schema_version": 1,
+      "metadata": {
+        "expected_return": 0.15,
+        "risk_contribution": 0.03
+      }
+    },
+    "portfolio_target": {
+      "schema_version": 1,
+      "timestamp": "2025-01-15T14:30:00+00:00",
+      "allocations": [
+        {
+          "symbol": "AAPL",
+          "weight": 0.4,
+          "conviction": 0.8,
+          "schema_version": 1
+        },
+        {
+          "symbol": "SPY",
+          "weight": 0.6,
+          "conviction": 0.9,
+          "schema_version": 1
+        }
+      ],
+      "max_leverage": 1.0,
+      "strategy_id": "mean_reversion_v1",
+      "rebalance_reason": "Signal threshold breach on AAPL"
+    },
+    "order_intent": {
+      "schema_version": 1,
+      "timestamp": "2025-01-15T14:30:00+00:00",
+      "symbol": "AAPL",
+      "order_id": "intent-12345",
+      "side": "BUY",
+      "quantity": 100.0,
+      "order_type": "LIMIT",
+      "limit_price": 150.50,
+      "strategy_id": "mean_reversion_v1",
+      "time_in_force": "DAY",
+      "metadata": {
+        "parent_signal": "signal-67890"
+      }
+    },
+    "order_exec": {
+      "schema_version": 1,
+      "timestamp": "2025-01-15T14:30:05+00:00",
+      "symbol": "AAPL",
+      "order_id": "intent-12345",
+      "status": "FILLED",
+      "filled_quantity": 100.0,
+      "remaining_quantity": 0.0,
+      "average_fill_price": 150.75,
+      "commission": 1.0,
+      "slippage": 0.25,
+      "broker_order_id": "IBKR-123456",
+      "execution_timestamp": "2025-01-15T14:30:05+00:00",
+      "metadata": {
+        "venue": "NASDAQ",
+        "execution_algo": "VWAP"
+      }
+    },
+    "risk_event": {
+      "schema_version": 1,
+      "timestamp": "2025-01-15T14:30:00+00:00",
+      "breach_type": "DAILY_DRAWDOWN",
+      "level": "CRITICAL",
+      "message": "Daily drawdown (-5.2%) exceeded limit (-5.0%)",
+      "limit_value": -5.0,
+      "observed_value": -5.2,
+      "symbol": "AAPL",
+      "order_id": "intent-12345",
+      "action_taken": "ORDER_BLOCKED",
+      "metadata": {
+        "portfolio_value": 95000.0,
+        "peak_value": 100000.0
+      }
+    }
+  },
+  "usage": {
+    "python": "from shared.models import Bar; bar = Bar.model_validate(samples['bar'])",
+    "validation": "python -c 'from shared.validation.schema_check import validate_all; validate_all()'"
+  }
+}
