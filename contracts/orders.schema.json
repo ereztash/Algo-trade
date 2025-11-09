@@ -1,6 +1,168 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Order Events",
-    "description": "Schema for order events like OrderIntent, Cancel, Amend, ExecutionReport",
-    "type": "object"
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ereztash/Algo-trade/contracts/orders.schema.json",
+  "title": "Order Events",
+  "description": "Schema for order events: OrderIntent, ExecutionReport",
+  "oneOf": [
+    { "$ref": "#/definitions/OrderIntent" },
+    { "$ref": "#/definitions/ExecutionReport" }
+  ],
+  "definitions": {
+    "OrderIntent": {
+      "type": "object",
+      "description": "Order intent emitted by Strategy Plane, consumed by Order Plane",
+      "required": [
+        "ts_utc",
+        "conid",
+        "side",
+        "qty",
+        "tif",
+        "meta"
+      ],
+      "properties": {
+        "ts_utc": {
+          "type": "number",
+          "description": "Unix timestamp (seconds) when intent was created",
+          "minimum": 0
+        },
+        "conid": {
+          "type": "integer",
+          "description": "IBKR contract ID",
+          "minimum": 1
+        },
+        "side": {
+          "type": "string",
+          "enum": ["BUY", "SELL"],
+          "description": "Order side: BUY or SELL"
+        },
+        "qty": {
+          "type": "number",
+          "description": "Order quantity (positive number, always absolute value)",
+          "exclusiveMinimum": 0
+        },
+        "tif": {
+          "type": "string",
+          "enum": ["DAY", "IOC", "GTC"],
+          "description": "Time-in-force: DAY (day order), IOC (immediate or cancel), GTC (good till cancel)"
+        },
+        "price": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "number",
+              "description": "Limit price (null = market order)",
+              "exclusiveMinimum": 0
+            }
+          ]
+        },
+        "meta": {
+          "type": "object",
+          "description": "Metadata for tracing and analytics",
+          "properties": {
+            "strategy_id": {
+              "type": "string",
+              "description": "Strategy identifier (e.g., 'QP', 'HRP', 'BL')"
+            },
+            "portfolio_id": {
+              "type": "string",
+              "description": "Portfolio identifier"
+            },
+            "signal_id": {
+              "type": "string",
+              "description": "Signal that triggered this order (e.g., 'OFI', 'ERN')"
+            },
+            "regime": {
+              "type": "string",
+              "enum": ["Calm", "Normal", "Storm"],
+              "description": "Market regime at order creation time"
+            },
+            "expected_slippage_bps": {
+              "type": "number",
+              "description": "Expected slippage in basis points"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Human-readable reason for order"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "ExecutionReport": {
+      "type": "object",
+      "description": "Execution report from broker after fill (full or partial)",
+      "required": [
+        "ts_utc",
+        "order_id",
+        "conid",
+        "fill_px",
+        "fill_qty",
+        "status",
+        "slippage"
+      ],
+      "properties": {
+        "ts_utc": {
+          "type": "number",
+          "description": "Unix timestamp (seconds) when fill occurred",
+          "minimum": 0
+        },
+        "order_id": {
+          "type": "string",
+          "description": "Unique order ID from broker (IBKR orderId or permId)",
+          "minLength": 1
+        },
+        "conid": {
+          "type": "integer",
+          "description": "IBKR contract ID",
+          "minimum": 1
+        },
+        "fill_px": {
+          "type": "number",
+          "description": "Fill price (execution price)",
+          "exclusiveMinimum": 0
+        },
+        "fill_qty": {
+          "type": "number",
+          "description": "Filled quantity (always positive, use side from intent for direction)",
+          "exclusiveMinimum": 0
+        },
+        "status": {
+          "type": "string",
+          "enum": ["FILLED", "PARTIAL", "REJECTED"],
+          "description": "Execution status: FILLED (complete), PARTIAL (partial fill), REJECTED (order rejected)"
+        },
+        "slippage": {
+          "type": "number",
+          "description": "Realized slippage in price units (fill_px - reference_px, signed)"
+        },
+        "commission": {
+          "type": "number",
+          "description": "Commission charged by broker (optional)",
+          "minimum": 0
+        },
+        "avg_price": {
+          "type": "number",
+          "description": "Average fill price if multiple partial fills (optional)",
+          "exclusiveMinimum": 0
+        },
+        "cum_qty": {
+          "type": "number",
+          "description": "Cumulative filled quantity (for partial fills)",
+          "minimum": 0
+        },
+        "leaves_qty": {
+          "type": "number",
+          "description": "Remaining quantity not yet filled",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string",
+          "description": "Optional text message from broker (rejection reason, etc.)"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
 }

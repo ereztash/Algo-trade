@@ -1,6 +1,235 @@
 {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Market Events",
-    "description": "Schema for market events like BarEvent, TickEvent, QuoteEvent, OFIEvent",
-    "type": "object"
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ereztash/Algo-trade/contracts/market_events.schema.json",
+  "title": "Market Events",
+  "description": "Schema for market events: BarEvent, TickEvent, QuoteEvent, OFIEvent",
+  "oneOf": [
+    { "$ref": "#/definitions/BarEvent" },
+    { "$ref": "#/definitions/TickEvent" },
+    { "$ref": "#/definitions/OFIEvent" }
+  ],
+  "definitions": {
+    "BarEvent": {
+      "type": "object",
+      "description": "OHLCV bar event from IBKR (real-time or historical)",
+      "required": [
+        "schema",
+        "ts_utc",
+        "tz",
+        "conid",
+        "symbol",
+        "primary_exchange",
+        "rth_flag",
+        "bar",
+        "src",
+        "adj_flags",
+        "ingest_id"
+      ],
+      "properties": {
+        "schema": {
+          "type": "integer",
+          "const": 1,
+          "description": "Schema version"
+        },
+        "ts_utc": {
+          "type": "number",
+          "description": "Unix timestamp (seconds since epoch) in UTC",
+          "minimum": 0
+        },
+        "tz": {
+          "type": "string",
+          "const": "UTC",
+          "description": "Timezone (always UTC)"
+        },
+        "conid": {
+          "type": "integer",
+          "description": "IBKR contract ID",
+          "minimum": 1
+        },
+        "symbol": {
+          "type": "string",
+          "description": "Asset symbol (e.g., SPY, TSLA, ESM25)",
+          "minLength": 1,
+          "maxLength": 20,
+          "pattern": "^[A-Z0-9]+$"
+        },
+        "primary_exchange": {
+          "type": "string",
+          "description": "Primary exchange (e.g., NASDAQ, NYSE, CME)",
+          "examples": ["NASDAQ", "NYSE", "CME", "SMART"]
+        },
+        "rth_flag": {
+          "type": "boolean",
+          "description": "True if Regular Trading Hours, False if Extended Hours"
+        },
+        "bar": {
+          "type": "object",
+          "description": "OHLCV bar data",
+          "required": ["o", "h", "l", "c", "v"],
+          "properties": {
+            "o": { "type": "number", "description": "Open price" },
+            "h": { "type": "number", "description": "High price" },
+            "l": { "type": "number", "description": "Low price" },
+            "c": { "type": "number", "description": "Close price" },
+            "v": { "type": "number", "description": "Volume" }
+          },
+          "additionalProperties": false
+        },
+        "src": {
+          "type": "string",
+          "enum": ["ibkr_rt", "ibkr_hist", "alt_hist"],
+          "description": "Data source: ibkr_rt (real-time), ibkr_hist (historical), alt_hist (alternative)"
+        },
+        "adj_flags": {
+          "type": "object",
+          "description": "Adjustment flags for corporate actions",
+          "required": ["split", "dividend"],
+          "properties": {
+            "split": { "type": "boolean", "description": "Split-adjusted" },
+            "dividend": { "type": "boolean", "description": "Dividend-adjusted" }
+          },
+          "additionalProperties": false
+        },
+        "ingest_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique ingestion ID for traceability"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TickEvent": {
+      "type": "object",
+      "description": "Level-1 quote event (bid/ask) from IBKR real-time",
+      "required": [
+        "schema",
+        "ts_utc",
+        "conid",
+        "bid",
+        "ask",
+        "bid_sz",
+        "ask_sz",
+        "last",
+        "last_sz",
+        "src",
+        "ingest_id"
+      ],
+      "properties": {
+        "schema": {
+          "type": "integer",
+          "const": 1,
+          "description": "Schema version"
+        },
+        "ts_utc": {
+          "type": "number",
+          "description": "Unix timestamp (seconds) in UTC",
+          "minimum": 0
+        },
+        "conid": {
+          "type": "integer",
+          "description": "IBKR contract ID",
+          "minimum": 1
+        },
+        "bid": {
+          "type": "number",
+          "description": "Bid price"
+        },
+        "ask": {
+          "type": "number",
+          "description": "Ask price"
+        },
+        "bid_sz": {
+          "type": "number",
+          "description": "Bid size (volume at bid)",
+          "minimum": 0
+        },
+        "ask_sz": {
+          "type": "number",
+          "description": "Ask size (volume at ask)",
+          "minimum": 0
+        },
+        "last": {
+          "type": "number",
+          "description": "Last trade price"
+        },
+        "last_sz": {
+          "type": "number",
+          "description": "Last trade size",
+          "minimum": 0
+        },
+        "level2": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "description": "Level-2 order book (optional, only in S2_L2_TBT state)",
+              "properties": {
+                "bids": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": [
+                      { "type": "number", "description": "Price" },
+                      { "type": "number", "description": "Size" }
+                    ]
+                  }
+                },
+                "asks": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": [
+                      { "type": "number", "description": "Price" },
+                      { "type": "number", "description": "Size" }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "src": {
+          "type": "string",
+          "const": "ibkr_rt",
+          "description": "Always real-time from IBKR"
+        },
+        "ingest_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique ingestion ID"
+        }
+      },
+      "additionalProperties": false
+    },
+    "OFIEvent": {
+      "type": "object",
+      "description": "Order Flow Imbalance (OFI) event computed from ticks",
+      "required": [
+        "ts_utc",
+        "conid",
+        "ofi_z"
+      ],
+      "properties": {
+        "ts_utc": {
+          "type": "number",
+          "description": "Unix timestamp (seconds) in UTC",
+          "minimum": 0
+        },
+        "conid": {
+          "type": "integer",
+          "description": "IBKR contract ID",
+          "minimum": 1
+        },
+        "ofi_z": {
+          "type": "number",
+          "description": "Normalized OFI z-score (σ-units from rolling mean)"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
 }
