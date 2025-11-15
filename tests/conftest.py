@@ -87,25 +87,15 @@ def sample_market_data(fixtures_dir):
     """
     import pandas as pd
 
-    # For now, create synthetic data
-    # TODO: Load from fixtures/market_data/ once created
-    np.random.seed(5001)  # From seeds.yaml: fixture_seeds.market_data
+    # Load from fixtures/market_data/sample_data.csv
+    # Generated using seed 5001 from seeds.yaml: fixture_seeds.market_data
+    market_data_file = fixtures_dir / "market_data" / "sample_data.csv"
 
-    dates = pd.date_range("2024-01-01", periods=100, freq="1D")
-    data = pd.DataFrame(
-        {
-            "date": dates,
-            "open": 100 + np.random.randn(100).cumsum(),
-            "high": 101 + np.random.randn(100).cumsum(),
-            "low": 99 + np.random.randn(100).cumsum(),
-            "close": 100 + np.random.randn(100).cumsum(),
-            "volume": np.random.randint(1000000, 10000000, 100),
-        }
-    )
+    if not market_data_file.exists():
+        pytest.fail(f"Market data fixture not found: {market_data_file}")
 
-    # Ensure OHLC consistency
-    data["high"] = data[["open", "high", "close"]].max(axis=1)
-    data["low"] = data[["open", "low", "close"]].min(axis=1)
+    data = pd.read_csv(market_data_file)
+    data["date"] = pd.to_datetime(data["date"])
 
     return data
 
