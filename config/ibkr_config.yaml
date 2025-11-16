@@ -1,0 +1,79 @@
+# IBKR Configuration for AlgoTrader Platform
+# This file configures Interactive Brokers connections for different environments
+
+# Paper Trading Configuration (Recommended for testing)
+paper_trading:
+  host: "127.0.0.1"
+  port: 7497  # TWS Paper Trading port (7497 for TWS, 4002 for Gateway)
+  client_id_data: 1  # Data Plane client ID
+  client_id_exec: 2  # Order Plane client ID
+  account: null  # Auto-detected if null
+  readonly: false
+  auto_reconnect: true
+  max_reconnect_attempts: 5
+  timeout: 10
+
+# Live Trading Configuration (USE WITH EXTREME CAUTION!)
+live_trading:
+  host: "127.0.0.1"
+  port: 7496  # TWS Live port (7496 for TWS, 4001 for Gateway)
+  client_id_data: 1
+  client_id_exec: 2
+  account: null  # Specify account number for live trading
+  readonly: false
+  auto_reconnect: true
+  max_reconnect_attempts: 3
+  timeout: 10
+
+# IB Gateway Configuration (Alternative to TWS)
+gateway_paper:
+  host: "127.0.0.1"
+  port: 4002  # IB Gateway Paper port
+  client_id_data: 1
+  client_id_exec: 2
+  account: null
+  readonly: false
+  auto_reconnect: true
+  max_reconnect_attempts: 5
+  timeout: 10
+
+gateway_live:
+  host: "127.0.0.1"
+  port: 4001  # IB Gateway Live port
+  client_id_data: 1
+  client_id_exec: 2
+  account: null
+  readonly: false
+  auto_reconnect: true
+  max_reconnect_attempts: 3
+  timeout: 10
+
+# Default environment (paper trading)
+default_environment: "paper_trading"
+
+# Order settings
+order_settings:
+  default_order_type: "LIMIT"
+  limit_offset_percent: 0.001  # 0.1% offset for limit orders
+  time_in_force: "DAY"
+  outside_rth: false  # Regular trading hours only
+
+# Market data settings
+market_data:
+  snapshot_delay_ms: 100  # Delay between snapshot requests
+  historical_bar_size: "1 min"
+  historical_duration: "1 D"
+  real_time_bars: true
+
+# Connection health check
+health_check:
+  interval_seconds: 30
+  timeout_seconds: 5
+  alert_on_disconnect: true
+
+# Logging
+logging:
+  level: "INFO"
+  log_orders: true
+  log_fills: true
+  log_errors: true

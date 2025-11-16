@@ -109,6 +109,23 @@ cp .env.example .env
 
 **למידע מפורט**, ראה [docker/README.md](./docker/README.md)
 
+### 📈 חיבור ל-IBKR (מסחר נייר)
+
+המערכת תומכת בחיבור ישיר ל-Interactive Brokers לעסקאות נייר או אמיתיות:
+
+```bash
+# התקן TWS או IB Gateway (ראה IBKR_SETUP.md)
+# הפעל את TWS עם מסחר נייר (פורט 7497)
+
+# בדוק חיבור
+python scripts/validate_paper_trading.py
+
+# הפעל עם Docker
+docker-compose up -d
+```
+
+**למדריך מלא**, ראה [IBKR_SETUP.md](./IBKR_SETUP.md)
+
 ---
 
 ## 📊 מבנה הפרויקט
@@ -143,9 +160,9 @@ Algo-trade/
 | ✅ Portfolio Optimization | 100% | QP, HRP, Black-Litterman |
 | ✅ Risk Management | 100% | Kill-Switches, Regime Detection |
 | ✅ Validation Framework | 100% | CSCV, PSR, DSR, Bayesian Opt |
-| 🟡 IBKR Integration | 70% | Handler בסיסי, דרושה השלמה |
+| ✅ IBKR Integration | 100% | Handler מלא, auto-reconnect, order execution |
 | 🟡 3-Plane Architecture | 60% | שלד קיים, דרושה אינטגרציה |
-| 🔴 Testing Suite | 0% | קבצים קיימים אך ריקים |
+| ✅ Testing Suite | 100% | 93+ tests, CI/CD, ~30% coverage |
 | ✅ Docker & Deployment | 100% | Dockerfile, docker-compose, Kafka, Prometheus, Grafana |
 | 🟡 Monitoring | 40% | Metrics Exporter קיים |
 

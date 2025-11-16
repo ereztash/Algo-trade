@@ -4,3 +4,24 @@ cvxpy
 pyyaml
 scipy
 scikit-learn
+
+# Interactive Brokers API
+ib_insync>=0.9.86
+
+# Kafka for message bus
+kafka-python>=2.0.2
+confluent-kafka>=2.0.2
+
+# Monitoring and metrics
+prometheus-client>=0.16.0
+
+# Async and HTTP
+aiohttp>=3.8.0
+asyncio
+
+# Schema validation
+jsonschema>=4.17.0
+pydantic>=2.0.0
+
+# Environment and config
+python-dotenv>=1.0.0
