@@ -1,6 +1,24 @@
+# Core scientific computing
 numpy
 pandas
 cvxpy
 pyyaml
 scipy
 scikit-learn
+
+# Message validation & contracts
+pydantic>=2.0.0  # Runtime validation with type safety
+jsonschema>=4.0.0  # JSON Schema validation
+
+# Message bus
+aiokafka>=0.8.0  # Async Kafka client for 3-plane messaging
+
+# Monitoring & observability
+prometheus-client>=0.16.0  # Prometheus metrics exporter
+aiohttp>=3.8.0  # Async HTTP server for metrics endpoints
+
+# Testing (dev dependencies)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+hypothesis>=6.0.0  # Property-based testing

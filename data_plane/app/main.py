@@ -41,20 +41,27 @@ async def main_async():
 
     ib_mkt     = IBKRMarketClient(cfg.get('ibkr', {}).get('market'))
     ib_exec    = IBKRExecClient(cfg.get('ibkr', {}).get('exec'))
-    
+
     # Placeholder for validators
     class Validators:
         def validate(self, ev): return True
     validators = Validators()
 
+    logger.info("Connecting to Kafka message bus...")
+    await bus.connect()
+
     logger.info("Starting all planes...")
-    
-    # Run all planes concurrently
-    await asyncio.gather(
-        run_data_plane(universe, ib_mkt, bus, pm, tddi_sm, time_svc, ntp_guard, fresh_mon, ofi_calc, store, comp_gate, kappa, metrics, validators),
-        run_order_plane(bus, ib_exec, logger, metrics),
-        run_strategy(bus)
-    )
+
+    try:
+        # Run all planes concurrently
+        await asyncio.gather(
+            run_data_plane(universe, ib_mkt, bus, pm, tddi_sm, time_svc, ntp_guard, fresh_mon, ofi_calc, store, comp_gate, kappa, metrics, validators),
+            run_order_plane(bus, ib_exec, logger, metrics),
+            run_strategy(bus)
+        )
+    finally:
+        logger.info("Disconnecting from Kafka...")
+        await bus.disconnect()
 
 def main():
     try:
