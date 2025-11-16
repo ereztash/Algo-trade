@@ -1,0 +1,292 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # Infrastructure Services
+  # ==========================================
+
+  # Zookeeper - Required for Kafka coordination
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    hostname: zookeeper
+    container_name: algotrader-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: WARN
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - algotrader-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka - Message bus for inter-plane communication
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka
+    container_name: algotrader-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - algotrader-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # Kafka UI - Web interface for Kafka monitoring
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: algotrader-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: algotrader
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - algotrader-network
+    restart: unless-stopped
+
+  # Prometheus - Metrics collection and storage
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: algotrader-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - algotrader-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Grafana - Metrics visualization and dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: algotrader-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - algotrader-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==========================================
+  # Application Services - The Three Planes
+  # ==========================================
+
+  # Data Plane - Market data ingestion, normalization, and quality assurance
+  data-plane:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_DEV: ${INSTALL_DEV:-false}
+    image: algotrader:latest
+    container_name: algotrader-data-plane
+    hostname: data-plane
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8000:8000"  # Metrics endpoint
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - PROMETHEUS_PORT=8000
+      - PYTHONPATH=/app
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # IBKR Configuration
+      - IBKR_HOST=${IBKR_HOST:-127.0.0.1}
+      - IBKR_PORT=${IBKR_PORT:-7497}
+      - IBKR_CLIENT_ID=${IBKR_CLIENT_ID:-1}
+      # Data Plane specific
+      - DATA_STORAGE_PATH=/app/data
+      - NTP_SERVER=${NTP_SERVER:-pool.ntp.org}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    networks:
+      - algotrader-network
+    restart: unless-stopped
+    command: ["python", "-m", "data_plane.app.main"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Strategy Plane - Signal generation, optimization, and decision making
+  strategy-plane:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_DEV: ${INSTALL_DEV:-false}
+    image: algotrader:latest
+    container_name: algotrader-strategy-plane
+    hostname: strategy-plane
+    depends_on:
+      kafka:
+        condition: service_healthy
+      data-plane:
+        condition: service_started
+    ports:
+      - "8001:8001"  # Metrics endpoint
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - PROMETHEUS_PORT=8001
+      - PYTHONPATH=/app
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Strategy configuration
+      - OPTIMIZATION_METHOD=${OPTIMIZATION_METHOD:-qp}
+      - RISK_MODEL=${RISK_MODEL:-covariance}
+      - SIGNAL_ENSEMBLE_METHOD=${SIGNAL_ENSEMBLE_METHOD:-ic_weighted}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    networks:
+      - algotrader-network
+    restart: unless-stopped
+    command: ["python", "-m", "apps.strategy_loop.main"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Order Plane - Order execution, risk checks, and learning
+  order-plane:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INSTALL_DEV: ${INSTALL_DEV:-false}
+    image: algotrader:latest
+    container_name: algotrader-order-plane
+    hostname: order-plane
+    depends_on:
+      kafka:
+        condition: service_healthy
+      strategy-plane:
+        condition: service_started
+    ports:
+      - "8002:8002"  # Metrics endpoint
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - PROMETHEUS_PORT=8002
+      - PYTHONPATH=/app
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # IBKR Configuration
+      - IBKR_HOST=${IBKR_HOST:-127.0.0.1}
+      - IBKR_PORT=${IBKR_PORT:-7497}
+      - IBKR_CLIENT_ID=${IBKR_CLIENT_ID:-2}
+      # Risk limits
+      - MAX_GROSS_EXPOSURE=${MAX_GROSS_EXPOSURE:-1000000}
+      - MAX_NET_EXPOSURE=${MAX_NET_EXPOSURE:-500000}
+      - MAX_POSITION_SIZE=${MAX_POSITION_SIZE:-100000}
+      - POV_LIMIT=${POV_LIMIT:-0.1}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config:/app/config
+    networks:
+      - algotrader-network
+    restart: unless-stopped
+    command: ["python", "-m", "order_plane.app.orchestrator"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8002/health').raise_for_status()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# ==========================================
+# Networks
+# ==========================================
+networks:
+  algotrader-network:
+    driver: bridge
+    name: algotrader-network
+
+# ==========================================
+# Volumes
+# ==========================================
+volumes:
+  zookeeper-data:
+    name: algotrader-zookeeper-data
+  zookeeper-logs:
+    name: algotrader-zookeeper-logs
+  kafka-data:
+    name: algotrader-kafka-data
+  prometheus-data:
+    name: algotrader-prometheus-data
+  grafana-data:
+    name: algotrader-grafana-data

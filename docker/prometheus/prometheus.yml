@@ -1,0 +1,84 @@
+# Prometheus Configuration for Algo-Trade Platform
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'algotrader'
+    environment: 'production'
+
+# Alerting configuration (optional - requires Alertmanager)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Rule files for alerting
+rule_files:
+  # - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # Data Plane metrics
+  - job_name: 'data-plane'
+    static_configs:
+      - targets: ['data-plane:8000']
+        labels:
+          service: 'data-plane'
+          plane: 'data'
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    scrape_timeout: 5s
+
+  # Strategy Plane metrics
+  - job_name: 'strategy-plane'
+    static_configs:
+      - targets: ['strategy-plane:8001']
+        labels:
+          service: 'strategy-plane'
+          plane: 'strategy'
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    scrape_timeout: 5s
+
+  # Order Plane metrics
+  - job_name: 'order-plane'
+    static_configs:
+      - targets: ['order-plane:8002']
+        labels:
+          service: 'order-plane'
+          plane: 'order'
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    scrape_timeout: 5s
+
+  # Kafka JMX metrics (requires JMX exporter)
+  # - job_name: 'kafka'
+  #   static_configs:
+  #     - targets: ['kafka:9999']
+  #       labels:
+  #         service: 'kafka'
+  #   metrics_path: '/metrics'
+
+  # Zookeeper metrics (if exposed)
+  # - job_name: 'zookeeper'
+  #   static_configs:
+  #     - targets: ['zookeeper:7000']
+  #       labels:
+  #         service: 'zookeeper'
+
+# Storage configuration
+storage:
+  tsdb:
+    path: /prometheus
+    retention:
+      time: 30d
+      size: 10GB

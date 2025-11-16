@@ -1,0 +1,97 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python cache and compiled files
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.code-workspace
+
+# Test and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Documentation
+docs/_build/
+*.md
+!README.md
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Environment files (will be mounted)
+.env
+.env.*
+!.env.example
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Data files (will be mounted as volumes)
+data/
+*.csv
+*.parquet
+*.h5
+*.hdf5
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Misc
+*.bak
+*.swp
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/

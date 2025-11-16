@@ -85,6 +85,30 @@ python algo_trade/core/main.py
 - **`targets.yaml`**: קובץ תצורה מרכזי עם 60+ פרמטרים
 - **`data/assets.csv`**: הגדרת נכסים למסחר
 
+### 🐳 הרצה עם Docker (מומלץ!)
+
+הדרך המומלצת להריץ את המערכת היא באמצעות Docker:
+
+```bash
+# העתק קובץ הגדרות
+cp .env.example .env
+
+# ערוך את .env עם ההגדרות שלך (IBKR_HOST, IBKR_PORT, וכו')
+
+# הרץ את כל השירותים
+./docker/docker-helper.sh start
+
+# בדוק סטטוס
+./docker/docker-helper.sh status
+```
+
+**גישה לממשקי Web:**
+- Grafana (דשבורד): http://localhost:3000 (admin/admin)
+- Prometheus (מטריקות): http://localhost:9090
+- Kafka UI (ניטור הודעות): http://localhost:8090
+
+**למידע מפורט**, ראה [docker/README.md](./docker/README.md)
+
 ---
 
 ## 📊 מבנה הפרויקט
@@ -122,7 +146,7 @@ Algo-trade/
 | 🟡 IBKR Integration | 70% | Handler בסיסי, דרושה השלמה |
 | 🟡 3-Plane Architecture | 60% | שלד קיים, דרושה אינטגרציה |
 | 🔴 Testing Suite | 0% | קבצים קיימים אך ריקים |
-| 🔴 Docker & Deployment | 0% | טרם הושלם |
+| ✅ Docker & Deployment | 100% | Dockerfile, docker-compose, Kafka, Prometheus, Grafana |
 | 🟡 Monitoring | 40% | Metrics Exporter קיים |
 
 **🎯 עד Production:** 12-16 שבועות (ראה מסמך מנהלים)
