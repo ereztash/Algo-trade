@@ -1,0 +1,77 @@
+# AlertManager Configuration
+# ==============================================================================
+# Handles alerts from Prometheus and routes to notification channels
+# ==============================================================================
+
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'localhost:25'
+  smtp_from: 'alertmanager@algo-trade.local'
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alerts
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+  receiver: 'default'
+
+  routes:
+    # Critical alerts (P0/P1)
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      continue: true
+
+    # Kill-switch alerts
+    - match:
+        alertname: 'KillSwitchTriggered'
+      receiver: 'kill-switch-alerts'
+      continue: true
+
+    # High severity alerts
+    - match:
+        severity: high
+      receiver: 'high-alerts'
+
+    # Warning alerts
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+
+# Receivers (notification channels)
+receivers:
+  - name: 'default'
+    # Default receiver (logs only in dev/staging)
+
+  - name: 'critical-alerts'
+    # webhook_configs:
+    #   - url: 'http://slack-webhook/critical'
+    #     send_resolved: true
+
+  - name: 'kill-switch-alerts'
+    # Email/SMS/PagerDuty for kill-switch triggers
+    # webhook_configs:
+    #   - url: 'http://pagerduty-webhook'
+    #     send_resolved: true
+
+  - name: 'high-alerts'
+    # webhook_configs:
+    #   - url: 'http://slack-webhook/high'
+
+  - name: 'warning-alerts'
+    # webhook_configs:
+    #   - url: 'http://slack-webhook/warnings'
+
+# Inhibition rules (suppress alerts based on other alerts)
+inhibit_rules:
+  # Suppress warnings if critical alert is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
