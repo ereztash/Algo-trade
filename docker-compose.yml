@@ -1,0 +1,228 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # Kafka Message Bus
+  # ============================================================================
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    hostname: zookeeper
+    container_name: algo-trade-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    networks:
+      - algo-trade-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka
+    container_name: algo-trade-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+
+      # Listeners
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # Replication and partitions
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_NUM_PARTITIONS: 3
+
+      # Performance tuning for low-latency trading
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
+      KAFKA_LOG_FLUSH_INTERVAL_MESSAGES: 1000
+      KAFKA_LOG_FLUSH_INTERVAL_MS: 100
+
+      # Compression for throughput
+      KAFKA_COMPRESSION_TYPE: 'lz4'
+    networks:
+      - algo-trade-network
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # ============================================================================
+  # Kafka UI (Optional - for debugging)
+  # ============================================================================
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: algo-trade-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: algo-trade
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    networks:
+      - algo-trade-network
+
+  # ============================================================================
+  # Monitoring Stack (Prometheus + Grafana)
+  # ============================================================================
+
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: algo-trade-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - algo-trade-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: algo-trade-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - ./infrastructure/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./infrastructure/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    networks:
+      - algo-trade-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # Kafka Topic Initializer (Creates topics on startup)
+  # ============================================================================
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: algo-trade-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - algo-trade-network
+    entrypoint: ['/bin/sh', '-c']
+    command: |
+      "
+      echo 'Waiting for Kafka to be ready...'
+      sleep 10
+
+      echo 'Creating Kafka topics...'
+
+      # Data Plane → Strategy Plane
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 \
+        --topic market_events \
+        --partitions 3 \
+        --replication-factor 1 \
+        --config compression.type=lz4 \
+        --config retention.ms=86400000
+
+      # Data Plane → Raw storage
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 \
+        --topic market_raw \
+        --partitions 3 \
+        --replication-factor 1 \
+        --config compression.type=lz4 \
+        --config retention.ms=604800000
+
+      # Strategy Plane → Order Plane
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 \
+        --topic order_intents \
+        --partitions 3 \
+        --replication-factor 1 \
+        --config compression.type=lz4 \
+        --config retention.ms=86400000
+
+      # Order Plane → Strategy Plane (feedback)
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 \
+        --topic exec_reports \
+        --partitions 3 \
+        --replication-factor 1 \
+        --config compression.type=lz4 \
+        --config retention.ms=86400000
+
+      # Dead Letter Queue
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 \
+        --topic dlq \
+        --partitions 1 \
+        --replication-factor 1 \
+        --config compression.type=lz4 \
+        --config retention.ms=604800000
+
+      # Test topics
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 \
+        --topic test_market_events \
+        --partitions 3 \
+        --replication-factor 1
+
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 \
+        --topic test_order_intents \
+        --partitions 3 \
+        --replication-factor 1
+
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 \
+        --topic test_exec_reports \
+        --partitions 3 \
+        --replication-factor 1
+
+      echo 'Topics created successfully!'
+      kafka-topics --list --bootstrap-server kafka:29092
+      "
+
+networks:
+  algo-trade-network:
+    driver: bridge
+    name: algo-trade-network
+
+volumes:
+  kafka-data:
+    name: algo-trade-kafka-data
+  prometheus-data:
+    name: algo-trade-prometheus-data
+  grafana-data:
+    name: algo-trade-grafana-data
