@@ -1,0 +1,52 @@
+# Prometheus configuration for Algo-trade monitoring
+
+global:
+  scrape_interval: 15s  # Scrape targets every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  external_labels:
+    cluster: 'algo-trade'
+    environment: 'development'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#             - alertmanager:9093
+
+# Scrape configurations
+scrape_configs:
+  # Data Plane metrics
+  - job_name: 'data_plane'
+    static_configs:
+      - targets: ['data_plane:8000']
+        labels:
+          service: 'data_plane'
+          plane: 'data'
+    metrics_path: '/metrics'
+    scrape_interval: 10s  # More frequent for data ingestion
+
+  # Order Plane metrics
+  - job_name: 'order_plane'
+    static_configs:
+      - targets: ['order_plane:8001']
+        labels:
+          service: 'order_plane'
+          plane: 'order'
+    metrics_path: '/metrics'
+    scrape_interval: 5s  # Most frequent for order execution
+
+  # Strategy Plane metrics
+  - job_name: 'strategy_plane'
+    static_configs:
+      - targets: ['strategy_plane:8002']
+        labels:
+          service: 'strategy_plane'
+          plane: 'strategy'
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
