@@ -135,6 +135,26 @@ reports/test_report.html
 *.log
 secrets.yaml
 .secrets/
+incidents/
+
+# Environment variables (NEVER commit these!)
+.env
+.env.local
+.env.production
+.env.staging
+.env.*.local
+
+# Vault tokens
+.vault-token
+vault-token
+
+# AWS credentials
+.aws/credentials
+
+# Backups (may contain sensitive data)
+backups/*.tar.gz
+backups/*.sql
+backups/*.dump
 
 # Temporary files
 *.tmp
