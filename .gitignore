@@ -160,3 +160,23 @@ backups/*.dump
 *.tmp
 *.bak
 *.old
+
+# Docker & Deployment
+docker-compose.override.yml
+.dockerignore
+*.tar  # Docker image exports
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+k8s/secrets-*.yaml  # Generated secrets
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+
+# AWS
+*.pem  # SSH keys

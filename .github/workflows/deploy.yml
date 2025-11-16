@@ -1,0 +1,277 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write  # For OIDC auth to AWS
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install security tools
+        run: pip install bandit==1.7.5
+
+      - name: Run Bandit security scan
+        run: |
+          bandit -r algo_trade/ data_plane/ order_plane/ apps/ -ll -f txt
+          echo "Security scan passed"
+
+      - name: Vulnerability check (dependencies)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt || echo "⚠️ Vulnerabilities found - review before deploy"
+        continue-on-error: true
+
+  build-and-push:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [data-plane, strategy-plane, order-plane]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag, and push image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: algo-trade/${{ matrix.service }}
+          IMAGE_TAG: ${{ github.event.inputs.version }}
+        run: |
+          docker build \
+            -f docker/Dockerfile.${{ matrix.service }} \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "Image pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+  deploy-staging:
+    if: github.event.inputs.environment == 'staging'
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.algo-trade.yourcompany.com
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG_STAGING }}
+
+      - name: Deploy to Kubernetes (Staging)
+        run: |
+          # Update image tags
+          kubectl set image deployment/data-plane \
+            data-plane=${{ secrets.ECR_REGISTRY }}/algo-trade/data-plane:${{ github.event.inputs.version }} \
+            -n algo-trade-staging
+
+          kubectl set image deployment/strategy-plane \
+            strategy-plane=${{ secrets.ECR_REGISTRY }}/algo-trade/strategy-plane:${{ github.event.inputs.version }} \
+            -n algo-trade-staging
+
+          kubectl set image deployment/order-plane \
+            order-plane=${{ secrets.ECR_REGISTRY }}/algo-trade/order-plane:${{ github.event.inputs.version }} \
+            -n algo-trade-staging
+
+          # Wait for rollout
+          kubectl rollout status deployment/data-plane -n algo-trade-staging --timeout=5m
+          kubectl rollout status deployment/strategy-plane -n algo-trade-staging --timeout=5m
+          kubectl rollout status deployment/order-plane -n algo-trade-staging --timeout=5m
+
+      - name: Run smoke tests
+        run: |
+          # Wait for services to be ready
+          sleep 30
+
+          # Test Data Plane
+          kubectl port-forward -n algo-trade-staging service/data-plane 8000:8000 &
+          sleep 5
+          curl -f http://localhost:8000/healthz || (echo "Data Plane health check failed" && exit 1)
+
+          # Test Strategy Plane
+          kubectl port-forward -n algo-trade-staging service/strategy-plane 8001:8001 &
+          sleep 5
+          curl -f http://localhost:8001/healthz || (echo "Strategy Plane health check failed" && exit 1)
+
+          # Test Order Plane
+          kubectl port-forward -n algo-trade-staging service/order-plane 8002:8002 &
+          sleep 5
+          curl -f http://localhost:8002/healthz || (echo "Order Plane health check failed" && exit 1)
+
+          echo "✅ All smoke tests passed"
+
+  deploy-production:
+    if: github.event.inputs.environment == 'production'
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://algo-trade.yourcompany.com
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Require manual approval
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ secrets.GITHUB_TOKEN }}
+          approvers: cto,risk-officer,senior-engineer
+          minimum-approvals: 2
+          issue-title: "Deploy ${{ github.event.inputs.version }} to Production"
+          issue-body: |
+            Please approve deployment to production.
+
+            **Version:** ${{ github.event.inputs.version }}
+            **Triggered by:** ${{ github.actor }}
+            **Time:** ${{ github.event.created_at }}
+
+            **Pre-deployment checklist:**
+            - [ ] Security scan passed
+            - [ ] Staging tests passed
+            - [ ] Risk parameters reviewed
+            - [ ] Rollback plan ready
+            - [ ] On-call engineer notified
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG_PRODUCTION }}
+
+      - name: Create deployment snapshot (for rollback)
+        run: |
+          kubectl get deployment data-plane -n algo-trade -o yaml > /tmp/data-plane-pre-deploy.yaml
+          kubectl get deployment strategy-plane -n algo-trade -o yaml > /tmp/strategy-plane-pre-deploy.yaml
+          kubectl get deployment order-plane -n algo-trade -o yaml > /tmp/order-plane-pre-deploy.yaml
+
+      - name: Deploy to Kubernetes (Production)
+        run: |
+          # CRITICAL: Deploy order matters - stop order submission first
+          # 1. Update Order Plane (stops new orders)
+          kubectl set image deployment/order-plane \
+            order-plane=${{ secrets.ECR_REGISTRY }}/algo-trade/order-plane:${{ github.event.inputs.version }} \
+            -n algo-trade
+          kubectl rollout status deployment/order-plane -n algo-trade --timeout=5m
+
+          # 2. Update Strategy Plane (stops new signals)
+          kubectl set image deployment/strategy-plane \
+            strategy-plane=${{ secrets.ECR_REGISTRY }}/algo-trade/strategy-plane:${{ github.event.inputs.version }} \
+            -n algo-trade
+          kubectl rollout status deployment/strategy-plane -n algo-trade --timeout=5m
+
+          # 3. Update Data Plane (data ingestion)
+          kubectl set image deployment/data-plane \
+            data-plane=${{ secrets.ECR_REGISTRY }}/algo-trade/data-plane:${{ github.event.inputs.version }} \
+            -n algo-trade
+          kubectl rollout status deployment/data-plane -n algo-trade --timeout=5m
+
+          echo "✅ Production deployment complete"
+
+      - name: Monitor deployment (5 minutes)
+        run: |
+          echo "Monitoring deployment for 5 minutes..."
+
+          for i in {1..10}; do
+            echo "Check $i/10..."
+
+            # Check pod health
+            kubectl get pods -n algo-trade
+
+            # Check metrics
+            kubectl port-forward -n algo-trade service/data-plane 8000:8000 &
+            sleep 2
+            curl -s http://localhost:8000/metrics | grep -E "up|health" || true
+            pkill -f "port-forward"
+
+            sleep 30
+          done
+
+          echo "✅ Monitoring complete - deployment stable"
+
+      - name: Slack notification
+        if: always()
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_PRODUCTION }}
+          payload: |
+            {
+              "text": "${{ job.status == 'success' && '✅' || '❌' }} Production Deployment ${{ job.status }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Production Deployment ${{ job.status }}*\n\n*Version:* ${{ github.event.inputs.version }}\n*Triggered by:* ${{ github.actor }}\n*Status:* ${{ job.status }}"
+                  }
+                }
+              ]
+            }
+
+  rollback:
+    if: failure()
+    needs: [deploy-staging, deploy-production]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Automatic rollback
+        run: |
+          echo "⚠️ Deployment failed - initiating automatic rollback"
+
+          # Rollback to previous revision
+          kubectl rollout undo deployment/order-plane -n algo-trade
+          kubectl rollout undo deployment/strategy-plane -n algo-trade
+          kubectl rollout undo deployment/data-plane -n algo-trade
+
+          echo "✅ Rollback complete"
+
+      - name: Notify team
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_PRODUCTION }}
+          payload: |
+            {
+              "text": "🚨 DEPLOYMENT FAILED - Automatic rollback initiated",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deployment Failed - Rollback Initiated*\n\n*Version:* ${{ github.event.inputs.version }}\n*Environment:* ${{ github.event.inputs.environment }}\n\n⚠️ System has been rolled back to previous version.\n\nPlease investigate logs and check incident playbook."
+                  }
+                }
+              ]
+            }

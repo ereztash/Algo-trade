@@ -1,0 +1,201 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-plane
+  namespace: algo-trade
+  labels:
+    app: order-plane
+    component: execution
+    version: v1
+spec:
+  replicas: 1  # Single instance to avoid duplicate orders
+  strategy:
+    type: Recreate  # Avoid duplicate order submission
+  selector:
+    matchLabels:
+      app: order-plane
+  template:
+    metadata:
+      labels:
+        app: order-plane
+        component: execution
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8002"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: algo-trade-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      initContainers:
+      - name: wait-for-kafka
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z kafka.algo-trade.svc.cluster.local 9092; do
+            echo "Waiting for Kafka..."
+            sleep 2
+          done
+          echo "Kafka is up!"
+
+      containers:
+      - name: order-plane
+        image: algo-trade/order-plane:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: metrics
+          containerPort: 8002
+          protocol: TCP
+
+        env:
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: ENVIRONMENT
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: LOG_LEVEL
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: KAFKA_BOOTSTRAP_SERVERS
+        - name: MAX_CONCURRENT_ORDERS
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: MAX_CONCURRENT_ORDERS
+        - name: ORDER_TIMEOUT_SEC
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: ORDER_TIMEOUT_SEC
+
+        # IBKR Credentials from Secrets
+        - name: IBKR_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: algo-trade-ibkr
+              key: username
+        - name: IBKR_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: algo-trade-ibkr
+              key: password
+        - name: IBKR_ACCOUNT
+          valueFrom:
+            secretKeyRef:
+              name: algo-trade-ibkr
+              key: account
+        - name: IBKR_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: algo-trade-ibkr
+              key: api-key
+
+        # IBKR Connection (override in production)
+        - name: IBKR_HOST
+          value: "ibkr-gateway.algo-trade.svc.cluster.local"
+        - name: IBKR_PORT
+          value: "4001"
+        - name: IBKR_CLIENT_ID
+          value: "2"
+
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8002
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: data
+          mountPath: /app/data
+        - name: backups
+          mountPath: /app/backups
+
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: data
+        persistentVolumeClaim:
+          claimName: order-plane-pvc
+      - name: backups
+        persistentVolumeClaim:
+          claimName: order-plane-backups-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-plane
+  namespace: algo-trade
+  labels:
+    app: order-plane
+spec:
+  type: ClusterIP
+  selector:
+    app: order-plane
+  ports:
+  - name: metrics
+    port: 8002
+    targetPort: 8002
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: order-plane-pvc
+  namespace: algo-trade
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: order-plane-backups-pvc
+  namespace: algo-trade
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard

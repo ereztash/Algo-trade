@@ -1,0 +1,200 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: strategy-plane
+  namespace: algo-trade
+  labels:
+    app: strategy-plane
+    component: strategy
+    version: v1
+spec:
+  replicas: 1  # Single instance for consistency
+  strategy:
+    type: Recreate  # Avoid duplicate signal generation
+  selector:
+    matchLabels:
+      app: strategy-plane
+  template:
+    metadata:
+      labels:
+        app: strategy-plane
+        component: strategy
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: algo-trade-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      initContainers:
+      - name: wait-for-kafka
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z kafka.algo-trade.svc.cluster.local 9092; do
+            echo "Waiting for Kafka..."
+            sleep 2
+          done
+          echo "Kafka is up!"
+
+      containers:
+      - name: strategy-plane
+        image: algo-trade/strategy-plane:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: metrics
+          containerPort: 8001
+          protocol: TCP
+
+        env:
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: ENVIRONMENT
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: LOG_LEVEL
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: KAFKA_BOOTSTRAP_SERVERS
+        - name: KILL_PNL_THRESHOLD
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: KILL_PNL_THRESHOLD
+        - name: MAX_DRAWDOWN_THRESHOLD
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: MAX_DRAWDOWN_THRESHOLD
+        - name: MIN_PSR_THRESHOLD
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: MIN_PSR_THRESHOLD
+        - name: SIGNAL_FREQ_SEC
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: SIGNAL_FREQ_SEC
+
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+          limits:
+            cpu: 4000m
+            memory: 8Gi
+
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8001
+          initialDelaySeconds: 90
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: data
+          mountPath: /app/data
+        - name: backups
+          mountPath: /app/backups
+        - name: reports
+          mountPath: /app/reports
+
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: data
+        persistentVolumeClaim:
+          claimName: strategy-plane-pvc
+      - name: backups
+        persistentVolumeClaim:
+          claimName: strategy-plane-backups-pvc
+      - name: reports
+        persistentVolumeClaim:
+          claimName: strategy-plane-reports-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: strategy-plane
+  namespace: algo-trade
+  labels:
+    app: strategy-plane
+spec:
+  type: ClusterIP
+  selector:
+    app: strategy-plane
+  ports:
+  - name: metrics
+    port: 8001
+    targetPort: 8001
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: strategy-plane-pvc
+  namespace: algo-trade
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: strategy-plane-backups-pvc
+  namespace: algo-trade
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: strategy-plane-reports-pvc
+  namespace: algo-trade
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard

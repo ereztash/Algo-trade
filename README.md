@@ -257,13 +257,17 @@ Algo-trade/
 
 ## 📚 תיעוד נוסף
 
-### ⚙️ תפעול ואבטחה (חדש!)
-- **[🔐 Secrets Management](./SECRETS_MANAGEMENT.md)** - ⭐ **חדש!** ניהול Secrets מלא: .env, Vault, AWS Secrets Manager
+### ⚙️ תפעול ואבטחה
+- **[🔐 Secrets Management](./SECRETS_MANAGEMENT.md)** - ⭐ ניהול Secrets מלא: .env, Vault, AWS Secrets Manager
 - **[📖 Runbook](./RUNBOOK.md)** - נהלי הפעלה והפסקה, ניטור, ותחזוקה שוטפת
-- **[🚨 Incident Playbook](./INCIDENT_PLAYBOOK.md)** - ⭐ **חדש!** תגובה לאירועים, playbooks לתרחישים שונים, escalation
-- **[👥 RACI Matrix](./RACI.md)** - ⭐ **חדש!** הגדרת אחריות ותפקידים בארגון
+- **[🚨 Incident Playbook](./INCIDENT_PLAYBOOK.md)** - ⭐ תגובה לאירועים, playbooks לתרחישים שונים
+- **[👥 RACI Matrix](./RACI.md)** - ⭐ הגדרת אחריות ותפקידים בארגון
 - **[✅ Pre-Live Checklist](./PRE_LIVE_CHECKLIST.md)** - שערי בקרה להפעלה בפועל
 - **[🔄 Rollback Procedure](./ROLLBACK_PROCEDURE.md)** - נהלי החזרה לגרסה קודמת
+
+### 🚀 Deployment & Infrastructure (**חדש!**)
+- **[📦 Deployment Guide](./DEPLOYMENT.md)** - ⭐ מדריך deployment מקיף: Docker, Kubernetes, AWS ECS/EC2
+- **[🔒 Security Audit Report](./SECURITY_AUDIT_REPORT.md)** - ⭐ דוח בדיקת אבטחה מלא (Bandit scan passed)
 
 ### 🔌 אינטגרציה עם IBKR
 - **[📊 IBKR Integration Flow](./IBKR_INTEGRATION_FLOW.md)** - 8 שלבי אינטגרציה מלאים
