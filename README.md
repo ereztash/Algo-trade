@@ -20,6 +20,12 @@
 - **[✅ Pre-Live Checklist](./PRE_LIVE_CHECKLIST.md)** - רשימת בדיקה מקיפה לפני Production (10 קטגוריות)
 - **[🔄 Rollback Procedure](./ROLLBACK_PROCEDURE.md)** - נוהל חירום לחזרה לגרסה קודמת
 
+### תפעול ואבטחה:
+- **[🛡️ Risk Policy](./RISK_POLICY.md)** - ⭐ **חדש!** מדיניות ניהול סיכונים פורמלית עם פרמטרים מאושרים
+- **[📖 Runbook](./RUNBOOK.md)** - נהלים תפעוליים להרצה, עצירה, וטיפול בתקלות
+- **[🚨 Incident Playbook](./INCIDENT_PLAYBOOK.md)** - ⭐ **חדש!** מדריך טיפול ב-10 תקלות נפוצות
+- **[👥 RACI Matrix](./RACI_MATRIX.md)** - ⭐ **חדש!** מטריצת אחריות ותפקידים
+
 ### למפתחים:
 - קוד מתועד היטב בעברית (docstrings)
 - ארכיטקטורה מודולרית - 3 Planes (Data, Strategy, Order)
@@ -197,6 +203,11 @@ Algo-trade/
 **🎯 עד Production:** 10-14 שבועות (ראה מסמך מנהלים)
 
 ### עדכונים אחרונים (נובמבר 2025):
+- ✅ **מסמכי תפעול ונהלי חירום** - ⭐ **חדש! (17 נוב')** סט מקיף של מסמכים תפעוליים
+  - **Risk Policy**: מדיניות סיכונים פורמלית (פרמטרי Kill-Switch, Exposure Limits, נהלי אישור)
+  - **Incident Playbook**: מדריך טיפול ב-10 תקלות נפוצות עם SLA מוגדר
+  - **RACI Matrix**: מטריצת אחריות ל-9 תפקידים (Risk Officer, CTO, Lead Quant, וכו')
+  - **סה"כ**: ~200 KB תיעוד תפעולי מוכן לאישור הנהלה
 - ✅ **IBKR Pre-Live Validation Framework** - מערכת בן 8 שלבים להכנה לחיבור IBKR
   - Stage 1-3 הושלמו: Artifact Validation, Hierarchical Breakdown, Interface Mapping
   - 6 מסמכים ליבה נוצרו (126.9 KB תיעוד)
