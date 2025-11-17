@@ -1,0 +1,206 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-plane
+  namespace: algo-trade
+  labels:
+    app: data-plane
+    component: ingestion
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: data-plane
+  template:
+    metadata:
+      labels:
+        app: data-plane
+        component: ingestion
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: algo-trade-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      initContainers:
+      - name: wait-for-kafka
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z kafka.algo-trade.svc.cluster.local 9092; do
+            echo "Waiting for Kafka..."
+            sleep 2
+          done
+          echo "Kafka is up!"
+
+      containers:
+      - name: data-plane
+        image: algo-trade/data-plane:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: metrics
+          containerPort: 8000
+          protocol: TCP
+
+        env:
+        # From ConfigMap
+        - name: ENVIRONMENT
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: ENVIRONMENT
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: LOG_LEVEL
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: algo-trade-config
+              key: KAFKA_BOOTSTRAP_SERVERS
+
+        # From Secrets
+        - name: IBKR_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: algo-trade-ibkr
+              key: username
+        - name: IBKR_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: algo-trade-ibkr
+              key: password
+        - name: IBKR_ACCOUNT
+          valueFrom:
+            secretKeyRef:
+              name: algo-trade-ibkr
+              key: account
+
+        # Vault integration
+        - name: VAULT_ADDR
+          value: "http://vault.algo-trade.svc.cluster.local:8200"
+        - name: VAULT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: algo-trade-vault
+              key: token
+        - name: DP_USE_VAULT
+          value: "1"
+
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: data
+          mountPath: /app/data
+        - name: backups
+          mountPath: /app/backups
+
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: data
+        persistentVolumeClaim:
+          claimName: data-plane-pvc
+      - name: backups
+        persistentVolumeClaim:
+          claimName: data-plane-backups-pvc
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - data-plane
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-plane
+  namespace: algo-trade
+  labels:
+    app: data-plane
+spec:
+  type: ClusterIP
+  selector:
+    app: data-plane
+  ports:
+  - name: metrics
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-plane-pvc
+  namespace: algo-trade
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-plane-backups-pvc
+  namespace: algo-trade
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard

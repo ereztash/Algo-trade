@@ -1,0 +1,84 @@
+{
+  "family": "algo-trade-data-plane",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/algoTradeTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "data-plane",
+      "image": "ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/algo-trade/data-plane:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "ENVIRONMENT",
+          "value": "production"
+        },
+        {
+          "name": "LOG_LEVEL",
+          "value": "INFO"
+        },
+        {
+          "name": "KAFKA_BOOTSTRAP_SERVERS",
+          "value": "b-1.algotrade.xxx.kafka.us-east-1.amazonaws.com:9092,b-2.algotrade.xxx.kafka.us-east-1.amazonaws.com:9092,b-3.algotrade.xxx.kafka.us-east-1.amazonaws.com:9092"
+        },
+        {
+          "name": "KAFKA_CONSUMER_GROUP",
+          "value": "data_plane_group"
+        },
+        {
+          "name": "USE_AWS_SECRETS",
+          "value": "true"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "AWS_SECRET_NAME",
+          "value": "algo-trade/production"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "IBKR_USERNAME",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:algo-trade/production/ibkr:username::"
+        },
+        {
+          "name": "IBKR_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:algo-trade/production/ibkr:password::"
+        },
+        {
+          "name": "IBKR_ACCOUNT",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:algo-trade/production/ibkr:account::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/algo-trade/data-plane",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/healthz || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    }
+  ]
+}

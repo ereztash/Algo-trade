@@ -1,0 +1,82 @@
+# ==============================================================================
+# Data Plane Dockerfile
+# ==============================================================================
+# Multi-stage build for production deployment
+# ==============================================================================
+
+# Stage 1: Builder
+FROM python:3.11-slim as builder
+
+# Set working directory
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    make \
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt requirements-dev.txt ./
+
+# Create virtual environment and install dependencies
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# ==============================================================================
+# Stage 2: Runtime
+FROM python:3.11-slim
+
+# Metadata
+LABEL maintainer="Algo-Trade Team"
+LABEL description="Data Plane - Market data ingestion and processing"
+LABEL version="1.0.0"
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    ENVIRONMENT=production \
+    LOG_LEVEL=INFO
+
+# Create non-root user for security
+RUN groupadd -r algotrader && useradd -r -g algotrader -u 1000 algotrader
+
+# Set working directory
+WORKDIR /app
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application code
+COPY --chown=algotrader:algotrader data_plane/ ./data_plane/
+COPY --chown=algotrader:algotrader shared/ ./shared/
+COPY --chown=algotrader:algotrader contracts/ ./contracts/
+COPY --chown=algotrader:algotrader fixtures/ ./fixtures/
+
+# Create necessary directories
+RUN mkdir -p logs data backups && \
+    chown -R algotrader:algotrader logs data backups
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import sys; sys.path.insert(0, '/app'); from data_plane.app.main import health_check; sys.exit(0 if health_check() else 1)" || exit 1
+
+# Switch to non-root user
+USER algotrader
+
+# Expose metrics port
+EXPOSE 8000
+
+# Run data plane
+CMD ["python", "-m", "data_plane.app.main"]

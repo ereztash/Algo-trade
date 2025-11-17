@@ -135,8 +135,48 @@ reports/test_report.html
 *.log
 secrets.yaml
 .secrets/
+incidents/
+
+# Environment variables (NEVER commit these!)
+.env
+.env.local
+.env.production
+.env.staging
+.env.*.local
+
+# Vault tokens
+.vault-token
+vault-token
+
+# AWS credentials
+.aws/credentials
+
+# Backups (may contain sensitive data)
+backups/*.tar.gz
+backups/*.sql
+backups/*.dump
 
 # Temporary files
 *.tmp
 *.bak
 *.old
+
+# Docker & Deployment
+docker-compose.override.yml
+.dockerignore
+*.tar  # Docker image exports
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+k8s/secrets-*.yaml  # Generated secrets
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+
+# AWS
+*.pem  # SSH keys

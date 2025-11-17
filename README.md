@@ -70,9 +70,24 @@
 ```bash
 Python 3.9+
 Interactive Brokers TWS/Gateway (לחיבור אמיתי)
+Docker (אופציונלי, עבור Kafka)
 ```
 
-### התקנה
+### התקנה והגדרה
+
+#### אוטומטי (מומלץ)
+```bash
+# Clone the repository
+git clone <repository-url>
+cd Algo-trade
+
+# הרץ סקריפט הגדרה אוטומטי
+./scripts/setup_env.sh
+
+# עקוב אחר ההוראות על המסך
+```
+
+#### ידני
 ```bash
 # Clone the repository
 git clone <repository-url>
@@ -81,8 +96,12 @@ cd Algo-trade
 # Install dependencies
 pip install -r requirements.txt
 
-# טען תצורה (יווצר אוטומטית אם לא קיים)
-python algo_trade/core/main.py
+# הגדר סביבת פיתוח
+cp .env.example .env
+nano .env  # ערוך עם הגדרות שלך
+
+# צור תיקיות נדרשות
+mkdir -p logs data backups reports incidents
 ```
 
 ### הרצה (Backtest)
@@ -238,4 +257,28 @@ Algo-trade/
 
 ## 📚 תיעוד נוסף
 
+### ⚙️ תפעול ואבטחה
+- **[🔐 Secrets Management](./SECRETS_MANAGEMENT.md)** - ⭐ ניהול Secrets מלא: .env, Vault, AWS Secrets Manager
+- **[📖 Runbook](./RUNBOOK.md)** - נהלי הפעלה והפסקה, ניטור, ותחזוקה שוטפת
+- **[🚨 Incident Playbook](./INCIDENT_PLAYBOOK.md)** - ⭐ תגובה לאירועים, playbooks לתרחישים שונים
+- **[👥 RACI Matrix](./RACI.md)** - ⭐ הגדרת אחריות ותפקידים בארגון
+- **[✅ Pre-Live Checklist](./PRE_LIVE_CHECKLIST.md)** - שערי בקרה להפעלה בפועל
+- **[🔄 Rollback Procedure](./ROLLBACK_PROCEDURE.md)** - נהלי החזרה לגרסה קודמת
+
+### 🚀 Deployment & Infrastructure (**חדש!**)
+- **[📦 Deployment Guide](./DEPLOYMENT.md)** - ⭐ מדריך deployment מקיף: Docker, Kubernetes, AWS ECS/EC2
+- **[🔒 Security Audit Report](./SECURITY_AUDIT_REPORT.md)** - ⭐ דוח בדיקת אבטחה מלא (Bandit scan passed)
+
+### 🔌 אינטגרציה עם IBKR
+- **[📊 IBKR Integration Flow](./IBKR_INTEGRATION_FLOW.md)** - 8 שלבי אינטגרציה מלאים
+- **[🗺️ IBKR Interface Map](./IBKR_INTERFACE_MAP.md)** - מפת API ופונקציונליות מפורטת
+- **[✅ IBKR Artifact Validation](./IBKR_ARTIFACT_VALIDATION_REPORT.md)** - דוח אימות artifacts
+- **[🎯 IBKR Pre-Live Execution](./IBKR_PRELIVE_EXECUTION_SUMMARY.md)** - סיכום ביצוע בדיקות
+
+### 🧪 בדיקות ואיכות
+- **[📋 QA Plan](./QA_PLAN.md)** - תוכנית בדיקות מקיפה
+- **[📊 QA Execution Summary](./QA_EXECUTION_SUMMARY.md)** - סיכום ביצוע בדיקות
+- **[📉 QA Gap Analysis](./QA_GAP_ANALYSIS.md)** - ניתוח פערים
+
+### 💬 חוזי הודעות
 - **[Message Contracts & Schema Validation](./contracts/README.md)** - מדריך מקיף לשימוש במערכת האימות

@@ -1,0 +1,86 @@
+# ==============================================================================
+# Strategy Plane Dockerfile
+# ==============================================================================
+# Multi-stage build for production deployment
+# ==============================================================================
+
+# Stage 1: Builder
+FROM python:3.11-slim as builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    make \
+    gfortran \
+    libopenblas-dev \
+    liblapack-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt ./
+
+# Create virtual environment and install dependencies
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# ==============================================================================
+# Stage 2: Runtime
+FROM python:3.11-slim
+
+# Metadata
+LABEL maintainer="Algo-Trade Team"
+LABEL description="Strategy Plane - Signal generation and portfolio optimization"
+LABEL version="1.0.0"
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    ENVIRONMENT=production \
+    LOG_LEVEL=INFO \
+    OMP_NUM_THREADS=4
+
+# Create non-root user
+RUN groupadd -r algotrader && useradd -r -g algotrader -u 1000 algotrader
+
+WORKDIR /app
+
+# Install runtime dependencies (scientific computing libs)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    libopenblas0 \
+    liblapack3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application code
+COPY --chown=algotrader:algotrader algo_trade/ ./algo_trade/
+COPY --chown=algotrader:algotrader apps/strategy_loop/ ./apps/strategy_loop/
+COPY --chown=algotrader:algotrader shared/ ./shared/
+COPY --chown=algotrader:algotrader contracts/ ./contracts/
+COPY --chown=algotrader:algotrader fixtures/ ./fixtures/
+COPY --chown=algotrader:algotrader data/ ./data/
+
+# Create necessary directories
+RUN mkdir -p logs data backups reports && \
+    chown -R algotrader:algotrader logs data backups reports
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)" || exit 1
+
+# Switch to non-root user
+USER algotrader
+
+# Expose metrics port
+EXPOSE 8001
+
+# Run strategy plane
+CMD ["python", "-m", "apps.strategy_loop.main"]
