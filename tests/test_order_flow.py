@@ -396,17 +396,17 @@ async def test_cancel_partial_fill(sample_order_intent: OrderIntent):
     """
     mock_partial = IBKRMockClient(
         auto_fill=True,
-        fill_delay_ms=50,
-        partial_fill_prob=0.6,  # 60% fill initially
+        fill_delay_ms=100,  # Longer delay to ensure we can cancel before full fill
+        partial_fill_prob=1.0,  # Force partial fill
     )
     await mock_partial.connect()
 
     order_id = await mock_partial.place(sample_order_intent)
 
-    # Wait for partial fill
-    await asyncio.sleep(0.1)
+    # Wait for partial fill (first fill happens at ~100ms)
+    await asyncio.sleep(0.12)
 
-    # Cancel remaining
+    # Cancel remaining (before second fill at ~150ms)
     success = await mock_partial.cancel(order_id)
 
     # Get final report

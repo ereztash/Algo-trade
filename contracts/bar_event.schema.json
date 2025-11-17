@@ -35,22 +35,22 @@
     "open": {
       "type": "number",
       "description": "Opening price",
-      "exclusiveMinimum": 0
+      "minimum": 0.000001
     },
     "high": {
       "type": "number",
       "description": "Highest price in period",
-      "exclusiveMinimum": 0
+      "minimum": 0.000001
     },
     "low": {
       "type": "number",
       "description": "Lowest price in period",
-      "exclusiveMinimum": 0
+      "minimum": 0.000001
     },
     "close": {
       "type": "number",
       "description": "Closing price",
-      "exclusiveMinimum": 0
+      "minimum": 0.000001
     },
     "volume": {
       "type": "integer",
