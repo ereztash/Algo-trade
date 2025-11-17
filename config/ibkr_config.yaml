@@ -1,0 +1,124 @@
+# IBKR Configuration
+# Interactive Brokers connection settings
+
+# Connection Settings
+ibkr:
+  # Host - typically localhost for local TWS/Gateway
+  host: 127.0.0.1
+
+  # Port Configuration:
+  # - Paper Trading TWS: 7497
+  # - Paper Trading Gateway: 4002
+  # - Live TWS: 7496
+  # - Live Gateway: 4001
+  port: 7497  # Default to Paper Trading
+
+  # Client ID - unique identifier for this connection
+  # Use different IDs for different clients (market data vs execution)
+  client_id: 1
+
+  # Connection timeout in seconds
+  timeout: 30
+
+  # Reconnection Settings
+  reconnect_attempts: 5
+  reconnect_backoff: [1, 2, 4, 8, 16]  # Exponential backoff in seconds
+
+# Market Data Client (separate connection)
+market_data:
+  host: 127.0.0.1
+  port: 7497
+  client_id: 2  # Different from execution client
+  timeout: 30
+
+# Execution Client
+execution:
+  host: 127.0.0.1
+  port: 7497
+  client_id: 1
+  timeout: 30
+
+# Order Settings
+orders:
+  # Default order type: MKT (market) or LMT (limit)
+  default_order_type: LMT
+
+  # Default time in force
+  default_tif: DAY
+
+  # Allow pre-market / after-hours trading
+  outside_rth: false
+
+  # Order size limits (shares)
+  max_order_size: 10000
+  min_order_size: 1
+
+# Risk Limits
+risk:
+  # Maximum daily loss (USD)
+  max_daily_loss: 5000
+
+  # Maximum position size per symbol (USD)
+  max_position_size: 100000
+
+  # Maximum total portfolio value (USD)
+  max_portfolio_value: 1000000
+
+# Logging
+logging:
+  level: INFO
+  log_file: logs/ibkr.log
+
+# Paper Trading Settings
+paper_trading:
+  enabled: true
+  initial_cash: 100000
+
+# Live Trading Settings (disabled by default)
+live_trading:
+  enabled: false
+  require_confirmation: true
+
+  # Additional safety checks
+  safety_checks:
+    - pre_trade_risk_check
+    - position_limit_check
+    - daily_loss_check
+
+# Data Feed Settings
+data_feed:
+  # Real-time bar size (seconds)
+  rt_bar_size: 5
+
+  # Historical data defaults
+  hist_duration: "1 D"
+  hist_bar_size: "1 min"
+
+  # What to show: TRADES, MIDPOINT, BID, ASK
+  what_to_show: TRADES
+
+  # Use regular trading hours only
+  use_rth: true
+
+# Health Check Settings
+health_check:
+  interval_seconds: 60
+  timeout_seconds: 10
+
+  # Alert if latency exceeds (milliseconds)
+  latency_threshold_ms: 100
+
+# Monitoring
+monitoring:
+  # Export metrics for Prometheus
+  prometheus_enabled: true
+  prometheus_port: 8000
+
+  # Metrics to track
+  metrics:
+    - connection_status
+    - order_count
+    - fill_rate
+    - latency
+    - positions_count
+    - account_value

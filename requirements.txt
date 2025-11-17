@@ -4,3 +4,7 @@ cvxpy
 pyyaml
 scipy
 scikit-learn
+ib-insync>=0.9.86
+kafka-python>=2.0.2
+prometheus-client>=0.17.0
+python-dotenv>=1.0.0

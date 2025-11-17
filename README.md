@@ -176,7 +176,7 @@ Algo-trade/
 | ✅ Risk Management | 100% | Kill-Switches, Regime Detection |
 | ✅ Validation Framework | 100% | CSCV, PSR, DSR, Bayesian Opt |
 | ✅ **Message Contracts & Schema Validation** | **100%** | **⭐ חדש! 5 סוגי הודעות, DLQ, 18 tests** |
-| 🟡 IBKR Integration | 70% | Handler בסיסי, דרושה השלמה |
+| ✅ **IBKR Integration** | **100%** | **⭐ חדש! Account/Positions/Orders, Reconnection, Tests** |
 | 🟡 3-Plane Architecture | 75% | שלד + Validation, דרושה אינטגרציה |
 | 🟡 Testing Suite | 25% | Schema validation tests הושלמו |
 | 🔴 Docker & Deployment | 0% | טרם הושלם |
@@ -185,6 +185,12 @@ Algo-trade/
 **🎯 עד Production:** 10-14 שבועות (ראה מסמך מנהלים)
 
 ### עדכונים אחרונים (נובמבר 2025):
+- ✅ **IBKR Integration (100%)** - אינטגרציה מלאה עם Interactive Brokers
+  - Account Summary, Positions, Orders API
+  - Reconnection logic עם exponential backoff
+  - IBKRExecClient ו-IBKRMarketClient מלאים
+  - 30+ Unit Tests + E2E Tests
+  - IBKR Configuration YAML
 - ✅ **Message Contracts & Schema Validation** - מערכת אימות מקיפה עם Pydantic v2 ו-JSON Schema
 - ✅ **18 Unit Tests** מכסים כל תרחישי האימות
 - ✅ **DLQ Integration** להודעות לא תקינות
