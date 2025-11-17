@@ -243,6 +243,281 @@ jobs:
             safety-report.json
             pip-audit-report.json
 
+  # =========================================================================
+  # SECRET SCANNING - Prevent credentials from being committed
+  # =========================================================================
+  secret-scanning:
+    runs-on: ubuntu-latest
+    name: Secret Detection
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Full history for comprehensive scanning
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # GitLeaks - Pattern-based secret detection
+      - name: GitLeaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+        continue-on-error: true
+        id: gitleaks
+
+      # detect-secrets - Yelp's secret detection tool
+      - name: Install detect-secrets
+        run: |
+          pip install detect-secrets
+
+      - name: Run detect-secrets scan
+        id: detect_secrets
+        run: |
+          echo "🔍 Scanning for secrets with detect-secrets..."
+
+          # Scan all files and compare with baseline
+          if [ -f .secrets.baseline ]; then
+            detect-secrets scan --baseline .secrets.baseline \
+              --exclude-files '\.git/.*' \
+              --exclude-files '\.env\.example$' \
+              --exclude-files 'tests/.*' > scan-results.json || true
+
+            # Check if new secrets were found
+            if grep -q "\"results\":" scan-results.json && [ "$(cat scan-results.json | grep -c '\"results\":')" -gt 0 ]; then
+              echo "secrets_found=true" >> $GITHUB_OUTPUT
+              echo "⚠️  New secrets detected!"
+              cat scan-results.json
+            else
+              echo "secrets_found=false" >> $GITHUB_OUTPUT
+              echo "✅ No new secrets detected"
+            fi
+          else
+            echo "⚠️  No .secrets.baseline found, creating one..."
+            detect-secrets scan > .secrets.baseline
+            echo "secrets_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      # TruffleHog - Additional secret scanning
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        continue-on-error: true
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+      # Scan for hardcoded IPs and sensitive patterns
+      - name: Check for hardcoded credentials patterns
+        run: |
+          echo "🔍 Checking for hardcoded credentials patterns..."
+
+          FINDINGS=0
+
+          # Check for common credential patterns in changed files
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}..HEAD | grep '\.py$' || true)
+
+          if [ -n "$CHANGED_FILES" ]; then
+            for file in $CHANGED_FILES; do
+              if [ -f "$file" ]; then
+                # Check for hardcoded passwords
+                if grep -iE "(password|passwd|pwd)\s*=\s*['\"][^'\"]+['\"]" "$file"; then
+                  echo "⚠️  Possible hardcoded password in $file"
+                  FINDINGS=$((FINDINGS + 1))
+                fi
+
+                # Check for API keys
+                if grep -iE "(api[_-]?key|apikey|api[_-]?secret)\s*=\s*['\"][a-zA-Z0-9]{20,}['\"]" "$file"; then
+                  echo "⚠️  Possible API key in $file"
+                  FINDINGS=$((FINDINGS + 1))
+                fi
+
+                # Check for tokens
+                if grep -iE "(token|auth[_-]?token)\s*=\s*['\"][a-zA-Z0-9]{20,}['\"]" "$file"; then
+                  echo "⚠️  Possible token in $file"
+                  FINDINGS=$((FINDINGS + 1))
+                fi
+              fi
+            done
+          fi
+
+          if [ $FINDINGS -gt 0 ]; then
+            echo "❌ Found $FINDINGS potential credential issues"
+            echo "Please review and use environment variables or Vault instead"
+            exit 1
+          else
+            echo "✅ No hardcoded credentials detected"
+          fi
+
+      # Comment on PR if secrets found
+      - name: Comment on PR if secrets detected
+        if: steps.detect_secrets.outputs.secrets_found == 'true' || steps.gitleaks.outcome == 'failure'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const message = `## 🚨 SECURITY ALERT: Secrets Detected!
+
+            This PR contains potential secrets or credentials that should NOT be committed to the repository.
+
+            ### Detected Issues
+            - Secret scanning tools detected potential credentials
+            - This is a **critical security issue** that must be resolved before merging
+
+            ### Required Actions
+            1. **Remove all secrets** from the code
+            2. **Revoke/rotate** any exposed credentials immediately
+            3. Use one of these alternatives:
+               - Environment variables (.env file, NOT committed)
+               - HashiCorp Vault (DP_USE_VAULT=1)
+               - AWS Secrets Manager
+            4. Update .secrets.baseline if false positive:
+               \`\`\`bash
+               detect-secrets scan > .secrets.baseline
+               git add .secrets.baseline
+               \`\`\`
+
+            ### Security Best Practices
+            - ✅ Use \`.env.example\` for templates (already configured)
+            - ✅ Store secrets in environment variables
+            - ✅ Use Vault/Secrets Manager for production
+            - ✅ Never commit files named \`.env\`, \`secrets.yaml\`, etc.
+            - ✅ Install pre-commit hooks: \`pre-commit install\`
+
+            ### Documentation
+            - [Secrets Management Guide](./docs/SECURITY.md)
+            - [.env.example Template](./.env.example)
+
+            **This PR is BLOCKED until secrets are removed.**
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
+
+            // Add critical label
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['security-critical', 'secrets-detected', 'blocked']
+            });
+
+      - name: Block merge if secrets found
+        if: steps.detect_secrets.outputs.secrets_found == 'true' || steps.gitleaks.outcome == 'failure'
+        run: |
+          echo "::error::🚨 SECRETS DETECTED - Merge blocked for security"
+          echo "Secrets or credentials were found in this PR"
+          echo "Remove all secrets and use environment variables or Vault instead"
+          echo ""
+          echo "See the PR comment for detailed remediation steps"
+          exit 1
+
+  # =========================================================================
+  # SECURITY SCANNING - Bandit for Python security issues
+  # =========================================================================
+  security-code-scan:
+    runs-on: ubuntu-latest
+    name: Security Code Analysis
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Bandit
+        run: |
+          pip install bandit[toml]
+
+      - name: Run Bandit security scan
+        id: bandit
+        run: |
+          echo "🔒 Running Bandit security analysis..."
+
+          # Run Bandit with configuration from pyproject.toml
+          bandit -c pyproject.toml -r algo_trade/ data_plane/ order_plane/ apps/ contracts/ \
+            -f json -o bandit-report.json || true
+
+          # Also generate text report for display
+          bandit -c pyproject.toml -r algo_trade/ data_plane/ order_plane/ apps/ contracts/ \
+            -f txt -o bandit-report.txt || true
+
+          # Check severity
+          HIGH_SEVERITY=$(cat bandit-report.json | grep -c '"issue_severity": "HIGH"' || echo "0")
+          MEDIUM_SEVERITY=$(cat bandit-report.json | grep -c '"issue_severity": "MEDIUM"' || echo "0")
+
+          echo "high_issues=$HIGH_SEVERITY" >> $GITHUB_OUTPUT
+          echo "medium_issues=$MEDIUM_SEVERITY" >> $GITHUB_OUTPUT
+
+          if [ "$HIGH_SEVERITY" -gt 0 ]; then
+            echo "❌ Found $HIGH_SEVERITY high severity security issues"
+            cat bandit-report.txt
+          elif [ "$MEDIUM_SEVERITY" -gt 0 ]; then
+            echo "⚠️  Found $MEDIUM_SEVERITY medium severity security issues"
+            cat bandit-report.txt
+          else
+            echo "✅ No significant security issues found"
+          fi
+
+      - name: Upload Bandit report
+        uses: actions/upload-artifact@v3
+        with:
+          name: bandit-security-report
+          path: |
+            bandit-report.json
+            bandit-report.txt
+
+      - name: Comment on PR if security issues found
+        if: steps.bandit.outputs.high_issues > 0
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const high = ${{ steps.bandit.outputs.high_issues }};
+            const medium = ${{ steps.bandit.outputs.medium_issues }};
+
+            const message = `## 🔒 Security Issues Detected
+
+            Bandit security analysis found potential security vulnerabilities:
+
+            - **High Severity**: ${high} issue(s)
+            - **Medium Severity**: ${medium} issue(s)
+
+            ### Required Actions
+            1. Review the Bandit report in the workflow artifacts
+            2. Fix all HIGH severity issues before merging
+            3. Address MEDIUM severity issues or document why they're acceptable
+
+            ### Common Issues
+            - Hardcoded passwords/secrets
+            - SQL injection vulnerabilities
+            - Command injection risks
+            - Insecure SSL/TLS configuration
+            - Use of unsafe functions (eval, exec, pickle)
+
+            Download the full report from the workflow artifacts for details.
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
+
+      - name: Fail on high severity issues
+        if: steps.bandit.outputs.high_issues > 0
+        run: |
+          echo "::error::High severity security issues found"
+          echo "Fix all high severity issues before merging"
+          exit 1
+
   check-documentation:
     runs-on: ubuntu-latest
     steps:
@@ -272,7 +547,7 @@ jobs:
           fi
 
   governance-summary:
-    needs: [check-risk-params, check-schema-changes, check-test-coverage, verify-dependencies, check-documentation]
+    needs: [check-risk-params, check-schema-changes, check-test-coverage, verify-dependencies, secret-scanning, security-code-scan, check-documentation]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -283,8 +558,16 @@ jobs:
           echo "All governance checks completed."
           echo "Review the individual check results above."
           echo ""
+          echo "### Security Checks Performed"
+          echo "✅ Secret Detection (GitLeaks, detect-secrets, TruffleHog)"
+          echo "✅ Security Code Analysis (Bandit)"
+          echo "✅ Dependency Vulnerability Scanning (Safety, pip-audit)"
+          echo "✅ Risk Parameter Protection"
+          echo "✅ Schema Compatibility"
+          echo ""
           echo "### Next Steps"
           echo "1. Address any warnings or required approvals"
-          echo "2. Ensure all test suites pass"
-          echo "3. Obtain necessary sign-offs"
-          echo "4. Proceed with merge when all gates are green"
+          echo "2. Fix all security issues (secrets, vulnerabilities)"
+          echo "3. Ensure all test suites pass"
+          echo "4. Obtain necessary sign-offs"
+          echo "5. Proceed with merge when all gates are green"

@@ -31,9 +31,14 @@ flake8>=6.1.0                 # Linter
 mypy>=1.5.0                   # Type checker
 isort>=5.12.0                 # Import sorter
 pylint>=2.17.0                # Static analyzer
-bandit>=1.7.5                 # Security linting
+
+# Security Scanning & Analysis
+bandit[toml]>=1.7.5           # Security linting
 safety>=2.3.0                 # Dependency vulnerability scanner
 pip-audit>=2.6.0              # Dependency auditing
+detect-secrets>=1.4.0         # Secret detection
+cryptography>=41.0.0          # Encryption (Fernet, TLS)
+hvac>=1.2.0                   # HashiCorp Vault client (optional)
 
 # Coverage Tools
 coverage[toml]>=7.3.0         # Coverage with pyproject.toml support

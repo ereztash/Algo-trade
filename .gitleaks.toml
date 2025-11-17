@@ -1,0 +1,186 @@
+# =============================================================================
+# GitLeaks Configuration
+# =============================================================================
+# Detects hardcoded secrets, passwords, API keys, and tokens
+#
+# Documentation: https://github.com/gitleaks/gitleaks
+# =============================================================================
+
+title = "Algo-Trade GitLeaks Configuration"
+
+# -----------------------------------------------------------------------------
+# Global Settings
+# -----------------------------------------------------------------------------
+
+[extend]
+# Use default gitleaks rules as base
+useDefault = true
+
+# -----------------------------------------------------------------------------
+# Custom Rules
+# -----------------------------------------------------------------------------
+
+[[rules]]
+id = "ibkr-credentials"
+description = "Interactive Brokers credentials"
+regex = '''(?i)(ibkr|interactive.?brokers).{0,20}(password|pwd|pass|secret|key|token).{0,20}[:=]\s*['"]?([a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{8,})['"]?'''
+tags = ["credentials", "ibkr"]
+
+[[rules]]
+id = "vault-token"
+description = "HashiCorp Vault token"
+regex = '''(?i)(vault.?token|hvs\.[a-zA-Z0-9]{24,})'''
+tags = ["vault", "token"]
+
+[[rules]]
+id = "fernet-key"
+description = "Fernet encryption key"
+regex = '''(?i)(fernet|MASTER_ENCRYPTION_KEY).{0,20}[:=]\s*['"]?([A-Za-z0-9+/]{40,}={0,2})['"]?'''
+tags = ["encryption", "key"]
+
+[[rules]]
+id = "kafka-password"
+description = "Kafka SASL password"
+regex = '''(?i)(kafka.?password|sasl.?password).{0,20}[:=]\s*['"]?([a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{8,})['"]?'''
+tags = ["kafka", "credentials"]
+
+[[rules]]
+id = "postgres-connection"
+description = "PostgreSQL connection string with password"
+regex = '''postgres(?:ql)?://[^:]+:([^@]+)@'''
+tags = ["database", "credentials"]
+
+[[rules]]
+id = "redis-password"
+description = "Redis password in connection string or config"
+regex = '''(?i)(redis.?password|requirepass).{0,20}[:=]\s*['"]?([a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{8,})['"]?'''
+tags = ["redis", "credentials"]
+
+[[rules]]
+id = "polygon-api-key"
+description = "Polygon.io API key"
+regex = '''(?i)(polygon.?api.?key).{0,20}[:=]\s*['"]?([A-Za-z0-9_-]{20,})['"]?'''
+tags = ["api-key", "polygon"]
+
+[[rules]]
+id = "alpaca-api-key"
+description = "Alpaca API key or secret"
+regex = '''(?i)(alpaca.?(api.?)?key|alpaca.?secret).{0,20}[:=]\s*['"]?([A-Za-z0-9]{20,})['"]?'''
+tags = ["api-key", "alpaca"]
+
+[[rules]]
+id = "sentry-dsn"
+description = "Sentry DSN with secret"
+regex = '''https://[a-f0-9]{32}:[a-f0-9]{32}@sentry\.io/\d+'''
+tags = ["sentry", "credentials"]
+
+[[rules]]
+id = "webhook-secret"
+description = "Webhook secret/token"
+regex = '''(?i)(webhook.?secret|webhook.?token).{0,20}[:=]\s*['"]?([a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]{16,})['"]?'''
+tags = ["webhook", "secret"]
+
+# -----------------------------------------------------------------------------
+# File Path Allowlists (exclude from scanning)
+# -----------------------------------------------------------------------------
+
+[allowlist]
+description = "Files and paths to exclude from scanning"
+
+paths = [
+  # Example/template files
+  '''\\.env\\.example$''',
+  '''\\.env\\.template$''',
+  '''example.*\\.env$''',
+
+  # Test files with dummy credentials
+  '''^tests/.*$''',
+  '''^test/.*$''',
+
+  # Documentation
+  '''\\.md$''',
+  '''README''',
+
+  # Lock files
+  '''\\.lock$''',
+  '''package-lock\\.json$''',
+  '''poetry\\.lock$''',
+  '''Pipfile\\.lock$''',
+
+  # Git files
+  '''\\.git/''',
+  '''\\.secrets\\.baseline$''',
+
+  # Build/vendor directories
+  '''^vendor/''',
+  '''^node_modules/''',
+  '''^dist/''',
+  '''^build/''',
+  '''^.venv/''',
+  '''^venv/''',
+]
+
+# Regex patterns to ignore (false positives)
+regexes = [
+  # Example/placeholder values
+  '''your-.*-here''',
+  '''change-me''',
+  '''replace-this''',
+  '''TODO''',
+  '''FIXME''',
+  '''example\\.com''',
+
+  # Common test values
+  '''test-.*-key''',
+  '''dummy-.*-password''',
+  '''fake-.*-token''',
+
+  # Template variables
+  '''\$\{.*\}''',
+  '''\{\{.*\}\}''',
+  '''<.*>''',
+
+  # Documentation examples
+  '''sk-test-''',
+  '''pk-test-''',
+]
+
+# Specific commits to ignore (for historical commits before security was added)
+commits = []
+
+# -----------------------------------------------------------------------------
+# Entropy Detection Settings
+# -----------------------------------------------------------------------------
+
+# Detect high-entropy strings (likely secrets)
+[[rules]]
+id = "high-entropy-string"
+description = "High entropy string (potential secret)"
+regex = '''['"][a-zA-Z0-9+/]{40,}={0,2}['"]'''
+entropy = 4.5
+tags = ["entropy", "secret"]
+
+# -----------------------------------------------------------------------------
+# Global Exclusions
+# -----------------------------------------------------------------------------
+
+# Stop words (common false positives)
+[allowlist.stopwords]
+stopwords = [
+  # Common variable names
+  "password",
+  "secret",
+  "token",
+  "api_key",
+  "apikey",
+
+  # When used in comments or documentation
+  "your_password_here",
+  "enter_password",
+  "set_password",
+
+  # Configuration keys (not values)
+  "DB_PASSWORD",
+  "API_TOKEN",
+  "SECRET_KEY",
+]

@@ -1,0 +1,271 @@
+# =============================================================================
+# Pre-Commit Hooks Configuration
+# =============================================================================
+# Prevents committing secrets, credentials, and sensitive data to git
+#
+# Setup:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run manually:
+#   pre-commit run --all-files
+#
+# Update hooks:
+#   pre-commit autoupdate
+# =============================================================================
+
+repos:
+  # -----------------------------------------------------------------------------
+  # Secret Detection - Prevents committing secrets
+  # -----------------------------------------------------------------------------
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        name: Detect secrets
+        args:
+          - '--baseline'
+          - '.secrets.baseline'
+          - '--exclude-files'
+          - '\.git/.*'
+          - '--exclude-files'
+          - '\.env\.example$'
+          - '--exclude-files'
+          - 'poetry\.lock'
+          - '--exclude-files'
+          - 'package-lock\.json'
+        exclude: |
+          (?x)^(
+            \.secrets\.baseline|
+            \.env\.example|
+            tests/.*|
+            .*\.lock
+          )$
+
+  # GitLeaks - Additional secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+        name: Detect hardcoded secrets with Gitleaks
+        entry: gitleaks protect --verbose --redact --staged
+        language: system
+        pass_filenames: false
+
+  # -----------------------------------------------------------------------------
+  # Code Quality & Security
+  # -----------------------------------------------------------------------------
+
+  # Bandit - Python security linter
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        name: Bandit security checks
+        args:
+          - '-c'
+          - 'pyproject.toml'
+          - '-r'
+          - 'algo_trade/'
+          - 'data_plane/'
+          - 'order_plane/'
+          - 'apps/'
+        exclude: ^tests/
+
+  # Safety - Check dependencies for known vulnerabilities
+  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
+    rev: v1.3.2
+    hooks:
+      - id: python-safety-dependencies-check
+        name: Check dependencies for vulnerabilities
+        files: requirements.*\.txt$
+
+  # -----------------------------------------------------------------------------
+  # General File Checks
+  # -----------------------------------------------------------------------------
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Prevent committing large files
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=1000']
+
+      # Prevent committing to main/master directly
+      - id: no-commit-to-branch
+        name: Don't commit to main/master
+        args:
+          - '--branch=main'
+          - '--branch=master'
+
+      # Check for merge conflicts
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+
+      # Check YAML syntax
+      - id: check-yaml
+        name: Check YAML syntax
+        args: ['--safe']
+        exclude: ^(docker-compose\.yml|\.github/workflows/.*)$
+
+      # Check JSON syntax
+      - id: check-json
+        name: Check JSON syntax
+
+      # Check TOML syntax
+      - id: check-toml
+        name: Check TOML syntax
+
+      # Ensure files end with newline
+      - id: end-of-file-fixer
+        name: Fix end of files
+        exclude: ^(\.secrets\.baseline)$
+
+      # Trim trailing whitespace
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+        args: ['--markdown-linebreak-ext=md']
+
+      # Check for private keys
+      - id: detect-private-key
+        name: Detect private keys
+
+      # Check for AWS credentials
+      - id: detect-aws-credentials
+        name: Detect AWS credentials
+        args: ['--allow-missing-credentials']
+
+  # -----------------------------------------------------------------------------
+  # Python Code Formatting & Linting
+  # -----------------------------------------------------------------------------
+
+  # Black - Python code formatter
+  - repo: https://github.com/psf/black
+    rev: 23.12.1
+    hooks:
+      - id: black
+        name: Format code with Black
+        language_version: python3.9
+        args:
+          - '--line-length=100'
+          - '--target-version=py39'
+
+  # isort - Import sorting
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: Sort imports with isort
+        args:
+          - '--profile=black'
+          - '--line-length=100'
+
+  # Flake8 - Python linting
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        name: Lint with Flake8
+        args:
+          - '--max-line-length=100'
+          - '--extend-ignore=E203,W503'
+          - '--exclude=.git,__pycache__,.venv,venv,build,dist'
+        additional_dependencies:
+          - flake8-docstrings
+          - flake8-bugbear
+          - flake8-comprehensions
+
+  # MyPy - Static type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        name: Type check with MyPy
+        args:
+          - '--ignore-missing-imports'
+          - '--disallow-untyped-defs'
+          - '--warn-redundant-casts'
+          - '--warn-unused-ignores'
+        exclude: ^(tests/|scripts/)
+        additional_dependencies:
+          - types-PyYAML
+          - types-requests
+
+  # -----------------------------------------------------------------------------
+  # Documentation
+  # -----------------------------------------------------------------------------
+
+  # Check links in markdown
+  - repo: https://github.com/tcort/markdown-link-check
+    rev: v3.11.2
+    hooks:
+      - id: markdown-link-check
+        name: Check markdown links
+        args:
+          - '--config'
+          - '.markdown-link-check.json'
+        files: \.md$
+
+  # -----------------------------------------------------------------------------
+  # Custom Scripts
+  # -----------------------------------------------------------------------------
+
+  # Check for TODO comments that should be addressed
+  - repo: local
+    hooks:
+      - id: check-todos
+        name: Check for critical TODOs
+        entry: bash -c 'if grep -rn "TODO.*SECURITY\|FIXME.*SECURITY" --include="*.py" .; then echo "⚠️  Critical security TODOs found!"; exit 1; fi'
+        language: system
+        pass_filenames: false
+
+      # Ensure .env is never committed
+      - id: block-env-files
+        name: Block .env files
+        entry: bash -c 'if git diff --cached --name-only | grep -E "^\.env$|^.*/\.env$"; then echo "❌ .env file detected! Use .env.example instead"; exit 1; fi'
+        language: system
+        pass_filenames: false
+
+      # Check for hardcoded IPs and domains
+      - id: check-hardcoded-endpoints
+        name: Check for hardcoded endpoints
+        entry: bash -c 'if git diff --cached -U0 | grep -E "^\+.*https?://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"; then echo "⚠️  Hardcoded IP addresses found in URLs"; exit 1; fi'
+        language: system
+        pass_filenames: false
+
+      # Verify encryption key is not committed
+      - id: check-encryption-keys
+        name: Check for encryption keys
+        entry: bash -c 'if git diff --cached | grep -iE "(MASTER_ENCRYPTION_KEY|Fernet|-----BEGIN.*KEY-----)"; then echo "❌ Encryption keys detected!"; exit 1; fi'
+        language: system
+        pass_filenames: false
+
+# =============================================================================
+# Configuration Notes
+# =============================================================================
+#
+# This configuration provides multi-layered protection:
+#
+# 1. SECRET DETECTION (3 tools):
+#    - detect-secrets: Comprehensive secret scanning
+#    - gitleaks: Additional pattern matching
+#    - detect-private-key: SSH/TLS key detection
+#
+# 2. SECURITY SCANNING:
+#    - bandit: Python security issues
+#    - safety: Dependency vulnerabilities
+#
+# 3. CODE QUALITY:
+#    - black: Consistent formatting
+#    - isort: Import organization
+#    - flake8: Linting
+#    - mypy: Type checking
+#
+# 4. CUSTOM CHECKS:
+#    - Block .env files
+#    - Check for critical TODOs
+#    - Prevent hardcoded endpoints
+#    - Verify no encryption keys
+#
+# =============================================================================
