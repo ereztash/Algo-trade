@@ -1,0 +1,208 @@
+version: '3.8'
+
+# ===================================================================
+# Algo-Trade Docker Compose Configuration
+# ===================================================================
+# Services:
+#   1. zookeeper    - Coordination service for Kafka
+#   2. kafka        - Message broker for inter-service communication
+#   3. prometheus   - Metrics collection and monitoring
+#   4. algo-trade   - Main application (data + order + strategy planes)
+#   5. postgres     - Database for persistent storage (optional)
+# ===================================================================
+
+services:
+  # ===================================================================
+  # 1. Zookeeper - Required for Kafka coordination
+  # ===================================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: algo-zookeeper
+    hostname: zookeeper
+    networks:
+      - algo-network
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===================================================================
+  # 2. Kafka - Message broker
+  # ===================================================================
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: algo-kafka
+    hostname: kafka
+    networks:
+      - algo-network
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # ===================================================================
+  # 3. Prometheus - Metrics and monitoring
+  # ===================================================================
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: algo-prometheus
+    hostname: prometheus
+    networks:
+      - algo-network
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===================================================================
+  # 4. Main Application - Algo Trading System
+  # ===================================================================
+  algo-trade:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: algo-trade-app
+    hostname: algo-trade
+    networks:
+      - algo-network
+    ports:
+      - "8000:8000"  # Metrics endpoint
+      - "8080:8080"  # Health check / API
+    depends_on:
+      kafka:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+    environment:
+      # Application settings
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Kafka configuration
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_AUTO_OFFSET_RESET=earliest
+
+      # IBKR configuration (from .env)
+      - IBKR_HOST=${IBKR_HOST:-127.0.0.1}
+      - IBKR_PORT=${IBKR_PORT:-7497}
+      - IBKR_CLIENT_ID=${IBKR_CLIENT_ID:-1}
+
+      # Prometheus metrics
+      - PROMETHEUS_PORT=8000
+
+      # Database (if using PostgreSQL)
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-algo_trade}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+    volumes:
+      # Mount config files
+      - ./data_plane/config:/app/data_plane/config:ro
+      - ./contracts:/app/contracts:ro
+      # Mount data directory for persistence
+      - algo-data:/app/data
+      # Mount logs directory
+      - algo-logs:/app/logs
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # ===================================================================
+  # 5. PostgreSQL - Database (Optional, for data persistence)
+  # ===================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: algo-postgres
+    hostname: postgres
+    networks:
+      - algo-network
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-algo_trade}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ===================================================================
+# Networks
+# ===================================================================
+networks:
+  algo-network:
+    driver: bridge
+    name: algo-trade-network
+
+# ===================================================================
+# Volumes for data persistence
+# ===================================================================
+volumes:
+  zookeeper-data:
+    name: algo-zookeeper-data
+  zookeeper-logs:
+    name: algo-zookeeper-logs
+  kafka-data:
+    name: algo-kafka-data
+  prometheus-data:
+    name: algo-prometheus-data
+  postgres-data:
+    name: algo-postgres-data
+  algo-data:
+    name: algo-app-data
+  algo-logs:
+    name: algo-app-logs
