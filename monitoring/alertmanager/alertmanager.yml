@@ -1,0 +1,133 @@
+# Alertmanager configuration for Algo-Trade
+global:
+  resolve_timeout: 5m
+  # Configure SMTP for email notifications (update with your settings)
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'alerts@algo-trade.com'
+  smtp_auth_username: 'alerts@algo-trade.com'
+  smtp_auth_password: 'YOUR_PASSWORD_HERE'  # Use environment variable in production
+  smtp_require_tls: true
+
+# Templates for alert notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route alerts to appropriate receivers
+route:
+  # Default receiver for all alerts
+  receiver: 'default-receiver'
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+
+  # Child routes for specific alert categories
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 5s
+      repeat_interval: 4h
+      continue: true
+
+    # Execution and risk alerts - high priority
+    - match_re:
+        category: (execution|risk)
+      receiver: 'trading-team'
+      group_wait: 30s
+      repeat_interval: 6h
+
+    # Data quality alerts
+    - match:
+        category: data_quality
+      receiver: 'data-team'
+      group_wait: 1m
+      repeat_interval: 8h
+
+    # Performance alerts - lower priority
+    - match:
+        category: performance
+      receiver: 'ops-team'
+      group_wait: 5m
+      repeat_interval: 12h
+
+# Alert receivers configuration
+receivers:
+  # Default receiver - log to webhook
+  - name: 'default-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts'
+        send_resolved: true
+
+  # Critical alerts - multiple channels
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'trading-alerts@company.com'
+        headers:
+          Subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>Critical Alert</h2>
+          <p><strong>Alert:</strong> {{ .GroupLabels.alertname }}</p>
+          <p><strong>Severity:</strong> {{ .CommonLabels.severity }}</p>
+          <p><strong>Category:</strong> {{ .CommonLabels.category }}</p>
+          {{ range .Alerts }}
+          <hr>
+          <p><strong>Summary:</strong> {{ .Annotations.summary }}</p>
+          <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+          <p><strong>Started:</strong> {{ .StartsAt }}</p>
+          {{ end }}
+
+    # Slack integration (configure webhook URL)
+    slack_configs:
+      - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+        channel: '#trading-alerts-critical'
+        title: '🚨 Critical Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}'
+
+    # PagerDuty integration (configure integration key)
+    # pagerduty_configs:
+    #   - service_key: 'YOUR_PAGERDUTY_KEY'
+
+  # Trading team alerts
+  - name: 'trading-team'
+    email_configs:
+      - to: 'traders@company.com'
+        headers:
+          Subject: 'Trading Alert: {{ .GroupLabels.alertname }}'
+
+    slack_configs:
+      - api_url: 'YOUR_SLACK_WEBHOOK_URL'
+        channel: '#trading-alerts'
+        title: '⚠️ Trading Alert: {{ .GroupLabels.alertname }}'
+
+  # Data team alerts
+  - name: 'data-team'
+    email_configs:
+      - to: 'data-team@company.com'
+        headers:
+          Subject: 'Data Quality Alert: {{ .GroupLabels.alertname }}'
+
+  # Operations team alerts
+  - name: 'ops-team'
+    email_configs:
+      - to: 'ops@company.com'
+        headers:
+          Subject: 'Performance Alert: {{ .GroupLabels.alertname }}'
+
+# Inhibition rules - suppress certain alerts when others are firing
+inhibit_rules:
+  # Suppress non-critical alerts when service is down
+  - source_match:
+      severity: 'critical'
+      alertname: 'ServiceDown'
+    target_match_re:
+      severity: 'warning'
+    equal: ['service']
+
+  # Suppress data quality alerts when market data is stale
+  - source_match:
+      alertname: 'MarketDataStale'
+    target_match:
+      category: 'data_quality'
+    equal: ['symbol']

@@ -1,0 +1,60 @@
+# Prometheus configuration for Algo-Trade monitoring
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'algo-trade-prod'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+
+# Load rules files
+rule_files:
+  - '/etc/prometheus/alerts.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Algo-Trade application metrics
+  - job_name: 'algo-trade-app'
+    scrape_interval: 5s  # More frequent for trading app
+    static_configs:
+      - targets: ['host.docker.internal:8000']  # Main application metrics endpoint
+        labels:
+          service: 'algo-trade-main'
+          plane: 'all'
+
+  # Node Exporter - System metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          instance: 'trading-server'
+
+  # If you have separate services, add them here:
+  # - job_name: 'data-plane'
+  #   static_configs:
+  #     - targets: ['data-plane:8001']
+  #       labels:
+  #         service: 'data-plane'
+  #
+  # - job_name: 'order-plane'
+  #   static_configs:
+  #     - targets: ['order-plane:8002']
+  #       labels:
+  #         service: 'order-plane'
+  #
+  # - job_name: 'strategy-plane'
+  #   static_configs:
+  #     - targets: ['strategy-plane:8003']
+  #       labels:
+  #         service: 'strategy-plane'

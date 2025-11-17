@@ -1,0 +1,228 @@
+groups:
+  # ============ Service Health Alerts ============
+  - name: service_health
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"algo-trade.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} on {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: ServiceUnhealthy
+        expr: service_health < 1
+        for: 2m
+        labels:
+          severity: warning
+          category: health
+        annotations:
+          summary: "Service {{ $labels.service }} is unhealthy"
+          description: "Service {{ $labels.service }} health check failing for 2 minutes."
+
+  # ============ Market Data Alerts ============
+  - name: market_data
+    interval: 15s
+    rules:
+      - alert: MarketDataStale
+        expr: market_data_freshness_seconds > 10
+        for: 30s
+        labels:
+          severity: critical
+          category: data_quality
+        annotations:
+          summary: "Market data stale for {{ $labels.symbol }}"
+          description: "No fresh market data for {{ $labels.symbol }} in {{ $value }} seconds (threshold: 10s)."
+
+      - alert: HighMarketDataLatency
+        expr: histogram_quantile(0.95, rate(market_data_latency_seconds_bucket[5m])) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High market data latency for {{ $labels.symbol }}"
+          description: "P95 market data latency is {{ $value }}s (threshold: 0.1s)."
+
+      - alert: LowDataCompleteness
+        expr: data_completeness_ratio < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          category: data_quality
+        annotations:
+          summary: "Low data completeness for {{ $labels.symbol }}"
+          description: "Data completeness is {{ $value }} for {{ $labels.symbol }}/{{ $labels.timeframe }} (threshold: 0.95)."
+
+      - alert: HighMarketDataErrorRate
+        expr: rate(market_data_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          category: errors
+        annotations:
+          summary: "High market data error rate"
+          description: "Market data error rate is {{ $value }}/s for {{ $labels.symbol }}."
+
+      - alert: NTPDriftExcessive
+        expr: abs(ntp_drift_milliseconds) > 100
+        for: 1m
+        labels:
+          severity: critical
+          category: time_sync
+        annotations:
+          summary: "Excessive NTP time drift"
+          description: "NTP drift is {{ $value }}ms (threshold: ±100ms). Time synchronization critical for trading."
+
+  # ============ Order Execution Alerts ============
+  - name: order_execution
+    interval: 15s
+    rules:
+      - alert: HighOrderRejectionRate
+        expr: rate(order_rejections_total[5m]) / rate(orders_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          category: execution
+        annotations:
+          summary: "High order rejection rate"
+          description: "Order rejection rate is {{ $value | humanizePercentage }} (threshold: 5%)."
+
+      - alert: HighExecutionLatency
+        expr: histogram_quantile(0.95, rate(execution_latency_seconds_bucket[5m])) > 1.0
+        for: 3m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High execution latency for {{ $labels.symbol }}"
+          description: "P95 execution latency is {{ $value }}s (threshold: 1.0s)."
+
+      - alert: NoOrderFills
+        expr: rate(order_fills_total[10m]) == 0 and rate(orders_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          category: execution
+        annotations:
+          summary: "No order fills despite active orders"
+          description: "Orders being placed but no fills received for 5+ minutes. Possible execution issue."
+
+  # ============ Risk Management Alerts ============
+  - name: risk_management
+    interval: 30s
+    rules:
+      - alert: ExcessiveGrossExposure
+        expr: sum by (exposure_type) (position_exposure_usd{exposure_type="gross"}) > 1000000
+        for: 1m
+        labels:
+          severity: critical
+          category: risk
+        annotations:
+          summary: "Gross exposure exceeds limit"
+          description: "Gross exposure is ${{ $value }} (limit: $1M)."
+
+      - alert: ExcessiveNetExposure
+        expr: abs(sum by (exposure_type) (position_exposure_usd{exposure_type="net"})) > 500000
+        for: 1m
+        labels:
+          severity: critical
+          category: risk
+        annotations:
+          summary: "Net exposure exceeds limit"
+          description: "Net exposure is ${{ $value }} (limit: ±$500K)."
+
+      - alert: HighRiskCheckFailureRate
+        expr: rate(risk_checks_total{result="fail"}[5m]) / rate(risk_checks_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          category: risk
+        annotations:
+          summary: "High risk check failure rate"
+          description: "{{ $value | humanizePercentage }} of risk checks failing (threshold: 10%)."
+
+  # ============ Performance Alerts ============
+  - name: performance
+    interval: 30s
+    rules:
+      - alert: HighStrategyComputationTime
+        expr: histogram_quantile(0.95, rate(strategy_computation_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Slow strategy computation"
+          description: "P95 strategy computation time is {{ $value }}s for {{ $labels.strategy_name }} (threshold: 0.5s)."
+
+      - alert: HighMessageBusLag
+        expr: message_bus_lag_seconds > 5
+        for: 2m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High message bus lag"
+          description: "Consumer lag is {{ $value }}s for {{ $labels.topic }}/{{ $labels.consumer_group }} (threshold: 5s)."
+
+      - alert: HighStorageWriteLatency
+        expr: histogram_quantile(0.95, rate(storage_write_latency_seconds_bucket[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High storage write latency"
+          description: "P95 storage write latency is {{ $value }}s (threshold: 0.1s)."
+
+  # ============ SLA Compliance Alerts ============
+  - name: sla_compliance
+    interval: 1m
+    rules:
+      - alert: SLAViolation
+        expr: sla_compliance_ratio < 0.99
+        for: 5m
+        labels:
+          severity: critical
+          category: sla
+        annotations:
+          summary: "SLA violation for {{ $labels.sla_metric }}"
+          description: "SLA compliance is {{ $value | humanizePercentage }} for {{ $labels.sla_metric }} (target: 99%)."
+
+  # ============ System Resource Alerts ============
+  - name: system_resources
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value }}% (threshold: 80%)."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value }}% (threshold: 85%)."
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Available disk space is {{ $value }}% (threshold: 15%)."
