@@ -140,3 +140,9 @@ secrets.yaml
 *.tmp
 *.bak
 *.old
+
+# Coverage reports
+coverage.json
+
+# Configuration (auto-generated, environment-specific)
+targets.yaml
