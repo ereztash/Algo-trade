@@ -1,0 +1,192 @@
+# Optimized Kafka Configuration for Low-Latency Trading System
+# Target: <200ms end-to-end latency
+
+# Producer Configuration (Order Plane → Kafka)
+producer:
+  # Batching settings for throughput vs latency tradeoff
+  linger_ms: 5  # Wait max 5ms to batch messages (was 0)
+  batch_size: 16384  # 16KB batches
+
+  # Compression for network efficiency
+  compression_type: lz4  # Fast compression (better than gzip for latency)
+
+  # Acknowledgment settings
+  acks: 1  # Leader acknowledgment only (was 'all' - too slow)
+  # Note: For critical order_intents topic, use acks: all
+
+  # Timeout and retry settings
+  request_timeout_ms: 5000  # 5 second timeout
+  delivery_timeout_ms: 10000  # Total delivery timeout
+  max_in_flight_requests_per_connection: 5  # Pipeline requests
+
+  # Buffer settings
+  buffer_memory: 33554432  # 32MB buffer
+
+  # Enable idempotence for exactly-once semantics
+  enable_idempotence: true
+
+  # Retry settings
+  retries: 3
+  retry_backoff_ms: 100
+
+
+# Consumer Configuration (Kafka → Strategy/Order Planes)
+consumer:
+  # Fetch settings for low latency
+  fetch_min_bytes: 1  # Don't wait to accumulate data
+  fetch_max_wait_ms: 10  # Max 10ms wait (very aggressive)
+
+  # Partition assignment
+  partition_assignment_strategy: RoundRobinAssignor
+
+  # Session and heartbeat
+  session_timeout_ms: 10000  # 10 seconds
+  heartbeat_interval_ms: 3000  # 3 seconds
+
+  # Auto-commit settings (for non-critical consumers)
+  enable_auto_commit: false  # Manual commit for precise control
+  auto_commit_interval_ms: 1000
+
+  # Offset reset strategy
+  auto_offset_reset: latest
+
+  # Max poll settings
+  max_poll_records: 500  # Fetch up to 500 records per poll
+  max_poll_interval_ms: 300000  # 5 minutes
+
+  # Deserialization
+  key_deserializer: StringDeserializer
+  value_deserializer: JSONDeserializer
+
+
+# Topic-Specific Settings
+topics:
+  market_raw:
+    partitions: 4  # Parallel processing
+    replication_factor: 2  # Balance between safety and performance
+    retention_ms: 28800000  # 8 hours
+    segment_ms: 3600000  # 1 hour segments
+    min_insync_replicas: 1
+    compression_type: lz4
+
+    # Cleanup policy
+    cleanup_policy: delete  # Delete old data
+
+    # Performance tuning
+    flush_ms: 1000  # Flush to disk every 1s
+    flush_messages: 10000  # Or every 10k messages
+
+  market_events:
+    partitions: 8  # More partitions for high throughput
+    replication_factor: 2
+    retention_ms: 86400000  # 24 hours
+    segment_ms: 3600000
+    min_insync_replicas: 1
+    compression_type: lz4
+    cleanup_policy: compact  # Keep latest value per key
+
+    # Compaction settings
+    min_compaction_lag_ms: 60000  # 1 minute before compaction
+    delete_retention_ms: 3600000  # 1 hour tombstone retention
+
+  ofi_events:
+    partitions: 4
+    replication_factor: 2
+    retention_ms: 86400000  # 24 hours
+    min_insync_replicas: 1
+    compression_type: lz4
+
+  order_intents:
+    partitions: 4
+    replication_factor: 3  # Higher replication for critical data
+    retention_ms: 21600000  # 6 hours
+    min_insync_replicas: 2  # Require 2 replicas for acks
+    compression_type: lz4
+
+    # CRITICAL: Strict ordering and durability
+    max_in_flight_requests_per_connection: 1  # Ensure ordering
+
+    # Use acks: all for this topic
+    producer_override:
+      acks: all
+
+  exec_reports:
+    partitions: 4
+    replication_factor: 3  # High replication for audit trail
+    retention_ms: 604800000  # 7 days
+    min_insync_replicas: 2
+    compression_type: lz4
+
+
+# Broker-Level Settings (for reference - configured on Kafka broker)
+broker_recommendations:
+  # Network threads
+  num_network_threads: 8
+  num_io_threads: 16
+
+  # Socket settings
+  socket_send_buffer_bytes: 102400  # 100KB
+  socket_receive_buffer_bytes: 102400
+  socket_request_max_bytes: 104857600  # 100MB
+
+  # Log settings
+  num_partitions: 4  # Default partitions
+  log_retention_hours: 24
+  log_segment_bytes: 1073741824  # 1GB segments
+
+  # Replication
+  default_replication_factor: 2
+  min_insync_replicas: 1
+
+  # Performance
+  num_replica_fetchers: 4
+  replica_lag_time_max_ms: 10000
+
+
+# Consumer Group Settings
+consumer_groups:
+  strategy_plane_group:
+    topics: [market_events, ofi_events]
+    num_consumers: 4  # Parallel consumers
+
+  order_plane_group:
+    topics: [order_intents]
+    num_consumers: 2
+
+  reporting_group:
+    topics: [exec_reports]
+    num_consumers: 1
+
+
+# Monitoring and Metrics
+monitoring:
+  # JMX metrics to track
+  metrics:
+    - kafka.producer:type=producer-metrics,client-id=*
+    - kafka.consumer:type=consumer-metrics,client-id=*
+    - kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec
+    - kafka.server:type=BrokerTopicMetrics,name=BytesInPerSec
+    - kafka.network:type=RequestMetrics,name=RequestQueueTimeMs
+    - kafka.network:type=RequestMetrics,name=TotalTimeMs
+
+  # Latency thresholds (ms)
+  latency_thresholds:
+    producer_p95: 50  # Producer send latency
+    consumer_p95: 30  # Consumer fetch latency
+    end_to_end_p95: 150  # End-to-end through Kafka
+
+
+# Performance Optimization Notes
+performance_notes: |
+  1. Producer Batching: linger_ms=5 provides good throughput/latency balance
+  2. Compression: LZ4 is fastest, use for all topics
+  3. Acks: Use acks=1 for market data, acks=all for orders
+  4. Consumer Fetch: fetch_max_wait_ms=10 for ultra-low latency
+  5. Partitions: More partitions = more parallelism, but overhead
+  6. Replication: Balance between durability and performance
+
+  Expected Latency Breakdown:
+  - Producer batching: 0-5ms
+  - Network + serialization: 5-15ms  - Broker processing: 5-10ms
+  - Consumer fetch: 0-10ms
+  - Total Kafka overhead: 10-40ms (well under 200ms budget)
