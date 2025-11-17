@@ -32,6 +32,21 @@ try:
 except Exception as e:  # pragma: no cover
     raise ImportError("Missing dependency 'pydantic'. Install via `pip install pydantic`. Error: " + str(e))
 
+# Import audit logger and secrets manager
+try:
+    from data_plane.config.audit_logger import get_audit_logger, audit_secret_access, audit_config_access, audit_vault_access
+    _HAS_AUDIT = True
+except ImportError:
+    _HAS_AUDIT = False
+    logger.debug("Audit logger not available")
+
+try:
+    from data_plane.config.secrets_manager import get_secrets_manager
+    _HAS_SECRETS_MANAGER = True
+except ImportError:
+    _HAS_SECRETS_MANAGER = False
+    logger.debug("Secrets manager not available")
+
 # hvac is optional; prefer it for Vault integration
 try:
     import hvac
@@ -140,6 +155,8 @@ def _env_overrides(prefix: str = ENV_PREFIX) -> Dict[str, Any]:
     """
     out: Dict[str, Any] = {}
     pref = prefix.upper()
+    sensitive_keys = {"password", "token", "key", "secret", "credential"}
+
     for k, v in os.environ.items():
         if not k.startswith(pref):
             continue
@@ -157,6 +174,12 @@ def _env_overrides(prefix: str = ENV_PREFIX) -> Dict[str, Any]:
         except Exception:
             parsed = v
         node[final_key] = parsed
+
+        # Audit secret access from environment variables
+        if _HAS_AUDIT and any(sk in final_key.lower() for sk in sensitive_keys):
+            full_key = ".".join(p.lower() for p in parts)
+            audit_secret_access(full_key, "environment", success=True)
+
     return out
 
 def _deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
@@ -183,43 +206,66 @@ def _fetch_secret_from_vault_hvac(vault_path: str) -> Dict[str, Any]:
     token = os.environ.get("VAULT_TOKEN")
     if not addr or not token:
         logger.debug("Vault not configured (VAULT_ADDR/VAULT_TOKEN missing)")
+        if _HAS_AUDIT:
+            audit_vault_access(vault_path, "read", success=False)
         return {}
     if not _HAS_HVAC:
         logger.debug("hvac not available")
+        if _HAS_AUDIT:
+            audit_vault_access(vault_path, "read", success=False)
         return {}
     try:
         client = hvac.Client(url=addr, token=token)
         if not client.is_authenticated():
             logger.warning("Vault client not authenticated")
+            if _HAS_AUDIT:
+                audit_vault_access(vault_path, "read", success=False)
         # try kv v2 pattern
         # if path starts with 'secret/data/' -> treat as kv v2; mount is part before '/data'
         p = vault_path.lstrip("/")
+        result = {}
         if "/data/" in p:
             mount, _, rel = p.partition("/data/")
             try:
                 resp = client.secrets.kv.v2.read_secret_version(path=rel, mount_point=mount)
                 if resp and isinstance(resp, dict) and "data" in resp and "data" in resp["data"]:
-                    return resp["data"]["data"]
-                if resp and isinstance(resp, dict) and "data" in resp:
-                    return resp["data"]
+                    result = resp["data"]["data"]
+                elif resp and isinstance(resp, dict) and "data" in resp:
+                    result = resp["data"]
+                if result:
+                    if _HAS_AUDIT:
+                        audit_vault_access(vault_path, "read", success=True)
+                    return result
             except Exception as e:
                 logger.debug("hvac kv.v2 read failed for %s: %s", vault_path, e)
         # try kv v1 or direct read
         try:
             resp = client.secrets.kv.v1.read_secret(path=p)
             if resp and isinstance(resp, dict) and "data" in resp:
-                return resp["data"]
+                result = resp["data"]
+                if result:
+                    if _HAS_AUDIT:
+                        audit_vault_access(vault_path, "read", success=True)
+                    return result
         except Exception:
             # last attempt: generic read
             try:
                 resp = client.secrets.kv.v2.read_secret_version(path=p)
                 if resp and "data" in resp and "data" in resp["data"]:
-                    return resp["data"]["data"]
+                    result = resp["data"]["data"]
+                    if result:
+                        if _HAS_AUDIT:
+                            audit_vault_access(vault_path, "read", success=True)
+                        return result
             except Exception as e:
                 logger.debug("hvac generic read failed for %s: %s", vault_path, e)
+        if _HAS_AUDIT:
+            audit_vault_access(vault_path, "read", success=False)
         return {}
     except Exception as e:
         logger.warning("hvac Vault fetch error for %s: %s", vault_path, e)
+        if _HAS_AUDIT:
+            audit_vault_access(vault_path, "read", success=False)
         return {}
 
 def _fetch_secret_from_vault_requests(vault_path: str) -> Dict[str, Any]:
@@ -262,23 +308,71 @@ def _fetch_secret_from_vault(vault_path: str) -> Dict[str, Any]:
         logger.debug("No hvac/requests available to fetch from Vault")
         return {}
 
+def _fetch_secret_from_encrypted_file() -> Dict[str, Any]:
+    """
+    Fetch secrets from encrypted local file using SecretsManager.
+    Returns dict of secrets or empty dict on failure.
+    """
+    if not _HAS_SECRETS_MANAGER:
+        logger.debug("Secrets manager not available")
+        return {}
+
+    try:
+        manager = get_secrets_manager()
+        if manager is None:
+            logger.debug("Encrypted secrets disabled or not configured")
+            return {}
+
+        secrets = manager.get_all_secrets()
+        if secrets:
+            logger.debug("Loaded %d secrets from encrypted file", len(secrets))
+            if _HAS_AUDIT:
+                for key in secrets.keys():
+                    audit_secret_access(key, "encrypted_file", success=True)
+        return secrets
+    except Exception as e:
+        logger.warning("Failed to fetch secrets from encrypted file: %s", e)
+        if _HAS_AUDIT:
+            audit_secret_access("*", "encrypted_file", success=False)
+        return {}
+
 # -----------------------
 # config construction + migrations
 # -----------------------
 @lru_cache(maxsize=1)
 def _build_config_obj(path: Optional[Path] = None, env_prefix: str = ENV_PREFIX, strict: bool = False) -> DataPlaneConfig:
     cfg_path = Path(path) if path is not None else DEFAULT_CONFIG_PATH
+
+    # Audit config file access
+    if _HAS_AUDIT:
+        audit_config_access(str(cfg_path), "read", success=True)
+
     yaml_map = _load_yaml_file(cfg_path)
     env_map = _env_overrides(prefix=env_prefix)
     merged = _deep_merge(yaml_map or {}, env_map or {})
 
-    # optionally incorporate Vault secrets when DP_USE_VAULT=1 and DP_VAULT_PATH is set
+    # Priority order for secrets:
+    # 1. Environment variables (highest priority - already in merged)
+    # 2. Vault (if enabled)
+    # 3. Encrypted local file (if enabled)
+    # 4. YAML config (lowest priority - already in merged)
+
+    # Option 1: Incorporate encrypted local secrets if enabled
+    if os.environ.get("DP_USE_ENCRYPTED_SECRETS", "0") == "1":
+        encrypted_secrets = _fetch_secret_from_encrypted_file()
+        if encrypted_secrets:
+            # Merge encrypted secrets (lower priority than env vars)
+            merged = _deep_merge({"broker": encrypted_secrets.get("broker", encrypted_secrets)}, merged)
+            logger.debug("Merged encrypted local secrets into config")
+
+    # Option 2: Incorporate Vault secrets if enabled (takes precedence over encrypted file)
     if os.environ.get("DP_USE_VAULT", "0") == "1":
         vpath = os.environ.get("DP_VAULT_PATH", "")
         if vpath:
             vault_map = _fetch_secret_from_vault(vpath) or {}
             # vault_map expected to contain nested keys; merge under 'broker' if present
-            merged = _deep_merge(merged, {"broker": vault_map.get("broker", vault_map)})
+            merged = _deep_merge({"broker": vault_map.get("broker", vault_map)}, merged)
+            logger.debug("Merged Vault secrets into config")
     try:
         cfg = DataPlaneConfig.parse_obj(merged)
     except ValidationError as ve:
