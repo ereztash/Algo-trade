@@ -1,0 +1,89 @@
+# Kafka Configuration for Algo-Trade Message Bus
+# This file defines Kafka connection settings and topic configurations
+
+kafka:
+  # Kafka broker connection settings
+  bootstrap_servers: "localhost:9092"  # Change to your Kafka broker address
+
+  # Consumer group settings
+  group_id: "algo-trade-consumer-group"
+  auto_offset_reset: "earliest"  # Options: earliest, latest, none
+  enable_auto_commit: true
+  max_poll_records: 500
+
+  # Producer settings
+  compression_type: "gzip"
+  acks: "all"  # Wait for all replicas to acknowledge
+  retries: 3
+
+  # Connection pooling
+  max_in_flight_requests_per_connection: 5
+  request_timeout_ms: 30000
+
+  # Health check settings
+  health_check_interval_sec: 60
+
+# Topic-specific configurations
+# These will be created automatically at startup if they don't exist
+topics:
+  market_raw:
+    retention: "8h"
+    partitions: 3
+    replication_factor: 1
+    description: "Raw market data from IBKR before normalization"
+
+  market_events:
+    retention: "24h"
+    partitions: 6
+    replication_factor: 1
+    compaction: true
+    keys: "conid"  # Partition by contract ID for data locality
+    description: "Normalized market events (BarEvent, TickEvent)"
+
+  ofi_events:
+    retention: "24h"
+    partitions: 3
+    replication_factor: 1
+    description: "Order Flow Imbalance signals"
+
+  order_intents:
+    retention: "6h"
+    partitions: 3
+    replication_factor: 1
+    acks: "all"  # Critical data - wait for all replicas
+    description: "Trading signals from Strategy Plane to Order Plane"
+
+  exec_reports:
+    retention: "7d"
+    partitions: 3
+    replication_factor: 1
+    description: "Execution reports from Order Plane back to Strategy"
+
+# Dead Letter Queue topics (auto-created)
+dlq_topics:
+  dlq_market_raw:
+    retention: "7d"
+    partitions: 1
+
+  dlq_market_events:
+    retention: "7d"
+    partitions: 1
+
+  dlq_ofi_events:
+    retention: "7d"
+    partitions: 1
+
+  dlq_order_intents:
+    retention: "7d"
+    partitions: 1
+
+  dlq_exec_reports:
+    retention: "7d"
+    partitions: 1
+
+# SLA settings for monitoring
+sla:
+  market_rt_p95_ms: 250  # P95 latency for real-time market data
+  hist_bar_max_lag_min: 5  # Max lag for historical bars
+  order_intent_max_latency_ms: 100  # Max latency for order intents
+  exec_report_max_latency_ms: 500  # Max latency for execution reports

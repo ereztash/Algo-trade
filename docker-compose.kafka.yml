@@ -1,0 +1,112 @@
+# Docker Compose for Kafka Message Bus (Development)
+# This file sets up a local Kafka cluster with Zookeeper for development and testing
+
+version: '3.8'
+
+services:
+  # Zookeeper - Required for Kafka coordination
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: algo-trade-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - algo-trade-network
+
+  # Kafka Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: algo-trade-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # Listener configuration for both internal and external access
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9093,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9093,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+
+      # Topic defaults
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"  # We create topics explicitly
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+
+      # Retention and cleanup
+      KAFKA_LOG_RETENTION_HOURS: 168  # 7 days
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824  # 1GB
+      KAFKA_LOG_CLEANUP_POLICY: delete
+
+      # Performance tuning
+      KAFKA_COMPRESSION_TYPE: gzip
+      KAFKA_MESSAGE_MAX_BYTES: 10485760  # 10MB
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 10485760
+
+      # Monitoring
+      KAFKA_JMX_PORT: 9999
+      KAFKA_JMX_HOSTNAME: localhost
+
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - algo-trade-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka UI (optional - for monitoring and management)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: algo-trade-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: algo-trade-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9093
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      DYNAMIC_CONFIG_ENABLED: "true"
+    networks:
+      - algo-trade-network
+
+volumes:
+  zookeeper-data:
+    driver: local
+  zookeeper-logs:
+    driver: local
+  kafka-data:
+    driver: local
+
+networks:
+  algo-trade-network:
+    driver: bridge
+
+# Usage:
+# Start Kafka cluster:
+#   docker-compose -f docker-compose.kafka.yml up -d
+#
+# Stop Kafka cluster:
+#   docker-compose -f docker-compose.kafka.yml down
+#
+# View logs:
+#   docker-compose -f docker-compose.kafka.yml logs -f kafka
+#
+# Access Kafka UI:
+#   http://localhost:8080
+#
+# Remove all data (clean restart):
+#   docker-compose -f docker-compose.kafka.yml down -v
