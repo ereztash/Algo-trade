@@ -1,6 +1,21 @@
-numpy
-pandas
-cvxpy
-pyyaml
-scipy
-scikit-learn
+# Core dependencies
+numpy>=1.24.0
+pandas>=2.0.0
+cvxpy>=1.3.0
+pyyaml>=6.0
+scipy>=1.10.0
+scikit-learn>=1.3.0
+
+# Message Bus (Kafka)
+confluent-kafka>=2.3.0  # Production-grade Kafka client with C bindings (high performance)
+aiokafka>=0.9.0         # Async Kafka client for asyncio integration
+
+# Broker Integration (IBKR)
+ib-insync>=0.9.86       # Interactive Brokers TWS API client
+
+# Monitoring & Observability
+prometheus-client>=0.17.0  # Prometheus metrics export
+
+# Data Validation (already in requirements-dev, adding here for production)
+pydantic>=2.5.0         # Data validation and settings management
+jsonschema>=4.19.0      # JSON Schema validation

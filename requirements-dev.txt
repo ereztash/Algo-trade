@@ -63,3 +63,6 @@ pyyaml>=6.0                   # YAML parsing
 python-dotenv>=1.0.0          # Environment variables
 tabulate>=0.9.0               # Table formatting
 colorama>=0.4.6               # Colored terminal output
+
+# Kafka Testing Tools
+kafka-python>=2.0.2           # Alternative Kafka client (for testing/comparison)
