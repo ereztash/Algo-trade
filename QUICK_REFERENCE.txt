@@ -1,0 +1,211 @@
+=================================================================================
+TEST COVERAGE QUICK REFERENCE - ALGO-TRADE
+=================================================================================
+
+📊 SNAPSHOT OVERVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Production Code:          ~6,000 LOC across 40+ modules
+Test Code:                ~2,300 LOC (38% of production)
+Actual Module Coverage:   7.5% (3 out of 40 modules)
+Critical Gaps:            Signal processing, Risk mgmt, Optimization
+
+═════════════════════════════════════════════════════════════════════════════
+
+✓ WELL-TESTED MODULES (90%+)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. order_plane/broker/ibkr_exec_client.py (577 LOC)
+   → tests/test_ibkr_exec_client.py (510 LOC tests)
+   → Coverage: Complete order execution flow
+
+2. contracts/schema_validator.py (497 LOC)
+   → tests/test_schema_validation.py (538 LOC tests)
+   → Coverage: All message validation contracts
+
+═════════════════════════════════════════════════════════════════════════════
+
+❌ CRITICAL GAPS (0% coverage, >300 LOC each)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SIGNALS SUBSYSTEM (494 LOC untested)
+├─ base_signals.py (166 LOC)
+│  ├─ ofi_signal() - Order Flow Imbalance
+│  ├─ ern_signal() - Earnings Momentum
+│  ├─ vrp_signal() - Volatility Risk Premium
+│  ├─ pos_signal() - Position Sizing
+│  ├─ tsx_signal() - Trend Following
+│  ├─ sif_signal() - Signal Flow
+│  └─ build_signals() - Signal aggregation
+├─ composite_signals.py (180 LOC)
+│  ├─ orthogonalize_signals() - OLS orthogonalization
+│  └─ combine_signals() - Weighted combination
+└─ feature_engineering.py (148 LOC)
+
+RISK MANAGEMENT (357 LOC untested)
+├─ covariance.py (112 LOC)
+│  ├─ _ewma_cov() - EWMA covariance estimation
+│  └─ _lw_cov() - Ledoit-Wolf shrinkage
+├─ drawdown.py (135 LOC)
+│  ├─ Maximum drawdown calculations
+│  ├─ Drawdown-based stops
+│  └─ Recovery metrics
+└─ regime_detection.py (110 LOC)
+   ├─ Regime classification
+   ├─ Volatility regimes
+   └─ Position limit adjustments
+
+OPTIMIZATION (337 LOC, <5% covered)
+├─ qp_solver.py (89 LOC) - solve_qp()
+│  ⚠️ Property tests exist but incomplete fixture
+├─ bayesian_optimization.py (205 LOC)
+├─ black_litterman.py (74 LOC)
+└─ hrp.py (87 LOC)
+
+CORE MODULES (280 LOC untested)
+├─ execution/execution.py (91 LOC) - Rebalancing logic
+├─ execution/transaction_costs.py (156 LOC) - Cost modeling
+└─ execution/IBKR_handler.py (33 LOC)
+
+═════════════════════════════════════════════════════════════════════════════
+
+⚠️  PARTIAL COVERAGE (need additional tests)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+contracts/validators.py (383 LOC)
+  → Pydantic models need edge case testing
+  → Current: Schema validation tested
+  → Need: Model validation + constraint tests
+
+algo_trade/core/main.py (855 LOC) 
+  → LARGEST module with ZERO tests
+  → Orchestration logic completely untested
+  → Need: Integration tests for flow
+
+order_plane/* (other than exec_client)
+  ├─ app/orchestrator.py (52 LOC) - 0 tests
+  ├─ intents/risk_checks.py (30 LOC) - 0 tests
+  ├─ broker/throttling.py (18 LOC) - 0 tests
+  └─ learning/lambda_online.py (17 LOC) - 0 tests
+
+═════════════════════════════════════════════════════════════════════════════
+
+🔴 STUBS/PLACEHOLDERS (Not production-ready for testing)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+data_plane/tddi/:
+  ├─ kappa_engine.py (109 bytes) - STUB
+  └─ state_manager.py (86 bytes) - STUB
+
+data_plane/qa/:
+  ├─ completeness_gate.py (3 LOC) - STUB
+  ├─ freshness_monitor.py (3 LOC) - STUB
+  └─ ntp_guard.py (3 LOC) - STUB
+
+data_plane/pacing/:
+  └─ pacing_manager.py (3 LOC) - STUB
+
+Test files:
+  ├─ tests/test_signals.py (0 LOC) - EMPTY PLACEHOLDER
+  ├─ tests/test_simulation.py (0 LOC) - EMPTY PLACEHOLDER
+  └─ tests/test_qp_solver.py (0 LOC) - EMPTY PLACEHOLDER
+
+═════════════════════════════════════════════════════════════════════════════
+
+📋 TEST INFRASTRUCTURE STATUS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ pytest.ini
+  • Test discovery configured
+  • Markers: unit, property, metamorphic, integration, e2e, chaos, perf
+  • Plugins: coverage, timeout, benchmark, xdist, html
+  • Timeout: 60 seconds per test
+
+✓ .coveragerc
+  • Branch coverage enabled
+  • Configured for: algo_trade, data_plane, order_plane
+  • HTML + XML reports configured
+
+✓ conftest.py (272 LOC)
+  Fixtures:
+  • set_random_seeds() - Session-scoped determinism
+  • sample_market_data() - 100-day OHLCV synthetic data
+  • sample_returns() - Percentage returns
+  • default_config() - Strategy configuration
+  • mock_ibkr_client() - Full IBKR mock
+
+  Hypothesis Strategies:
+  • returns_array() - Realistic return matrices
+  • mu_vector() - Expected returns vectors
+  • covariance_matrix() - PSD matrices
+
+✓ requirements-dev.txt
+  • pytest + plugins
+  • hypothesis + numpy/pandas strategies
+  • faker, factory-boy, freezegun, responses
+
+═════════════════════════════════════════════════════════════════════════════
+
+🎯 PRIORITIZED ACTION ITEMS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRIORITY 1 - CRITICAL (Start immediately):
+  [ ] Fill tests/test_signals.py (400-500 LOC)
+      └─ Unit tests for OFI, ERN, VRP, POS, TSX, SIF, build_signals
+  [ ] Create tests/test_composite_signals.py (300-400 LOC)
+      └─ orthogonalize_signals, combine_signals + property tests
+  
+PRIORITY 2 - HIGH (Next):
+  [ ] Create tests/test_covariance.py (250-300 LOC)
+      └─ EWMA, Ledoit-Wolf, PSD properties
+  [ ] Complete tests/test_qp_solver.py (200-300 LOC)
+      └─ Implement fixture, add unit tests
+  [ ] Create tests/test_optimization.py (300-400 LOC)
+      └─ Bayesian, Black-Litterman, HRP tests
+
+PRIORITY 3 - HIGH (Execution):
+  [ ] Create tests/test_execution.py (250-300 LOC)
+      └─ Rebalancing, validation
+  [ ] Create tests/test_risk_management.py (200-300 LOC)
+      └─ Drawdown, regime detection tests
+
+PRIORITY 4 - MEDIUM (Data/Strategy planes):
+  [ ] Create tests/test_data_plane_validation.py (200-250 LOC)
+  [ ] Create tests/test_strategy_loop.py (200-300 LOC)
+  [ ] Create tests/test_data_connectors.py (200-250 LOC)
+
+═════════════════════════════════════════════════════════════════════════════
+
+📈 COVERAGE PROJECTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Current:
+  • Production: 6,000 LOC
+  • Tests: 2,300 LOC (38% ratio)
+  • Modules covered: 3/40 (7.5%)
+
+After Priority 1-2 (2,500+ new test LOC):
+  • Total tests: 4,800+ LOC
+  • Coverage ratio: 60%+
+  • Modules covered: 15/40 (37.5%)
+
+Full Implementation:
+  • Target: 6,000 test LOC
+  • Coverage ratio: 50% (1:1 test-to-prod)
+  • Modules covered: 25-30/40 (62-75%)
+
+═════════════════════════════════════════════════════════════════════════════
+
+📄 FILES GENERATED FOR YOU
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ TEST_COVERAGE_ANALYSIS.md
+  → Comprehensive 300+ line report with gap analysis matrix
+
+✓ MODULE_INVENTORY.txt
+  → Tree view of all modules by directory with test status
+
+✓ QUICK_REFERENCE.txt (this file)
+  → Executive summary for quick overview
+
+═════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,174 @@
+==============================================================================
+COMPLETE MODULE INVENTORY - ALGO-TRADE
+==============================================================================
+
+PRODUCTION MODULES BY DIRECTORY
+==============================================================================
+
+/algo_trade/core/signals/ (494 LOC, 0 tests)
+  ├── base_signals.py (166 LOC) - 6 signals + build_signals()
+  ├── composite_signals.py (180 LOC) - orthogonalize, combine_signals
+  └── feature_engineering.py (148 LOC)
+
+/algo_trade/core/risk/ (357 LOC, 0 tests)
+  ├── covariance.py (112 LOC) - EWMA, Ledoit-Wolf
+  ├── drawdown.py (135 LOC)
+  └── regime_detection.py (110 LOC)
+
+/algo_trade/core/optimization/ (337 LOC, ~336 property tests only)
+  ├── qp_solver.py (89 LOC) - solve_qp()
+  ├── bayesian_optimization.py (205 LOC)
+  ├── black_litterman.py (74 LOC)
+  └── hrp.py (87 LOC)
+
+/algo_trade/core/execution/ (280 LOC, 0 tests)
+  ├── execution.py (91 LOC)
+  ├── transaction_costs.py (156 LOC)
+  └── IBKR_handler.py (33 LOC)
+
+/algo_trade/core/ (241 LOC, 0 tests)
+  ├── main.py (855 LOC) ⚠️ LARGE
+  ├── config.py (82 LOC)
+  ├── ensemble.py (55 LOC)
+  ├── gate_linucb.py (71 LOC)
+  ├── simulation.py (23 LOC) - empty placeholder
+  ├── utils.py (0 LOC) - empty
+  └── validation/
+      ├── cross_validation.py
+      └── overfitting.py
+
+/data_plane/ (388 LOC, 0 tests)
+  ├── app/
+  │   ├── main.py (67 LOC)
+  │   ├── orchestrator.py (66 LOC)
+  │   └── time_service.py (3 LOC)
+  ├── connectors/ibkr/
+  │   ├── client.py (6 LOC)
+  │   ├── producers_hist.py (24 LOC)
+  │   └── producers_rt.py (19 LOC)
+  ├── normalization/
+  │   ├── normalize.py (16 LOC)
+  │   └── ofi_from_quotes.py (3 LOC)
+  ├── validation/
+  │   └── message_validator.py (188 LOC)
+  ├── pacing/
+  │   └── pacing_manager.py (3 LOC)
+  ├── qa/
+  │   ├── completeness_gate.py (3 LOC)
+  │   ├── freshness_monitor.py (3 LOC)
+  │   └── ntp_guard.py (3 LOC)
+  ├── tddi/
+  │   ├── kappa_engine.py (109 bytes) - STUB
+  │   └── state_manager.py (86 bytes) - STUB
+  ├── bus/
+  │   └── kafka_adapter.py
+  ├── config/
+  │   └── utils.py
+  ├── monitoring/
+  │   └── metrics_exporter.py
+  └── storage/
+      └── writer.py
+
+/order_plane/ (694 LOC, 510 LOC tests)
+  ├── app/
+  │   └── orchestrator.py (52 LOC)
+  ├── broker/
+  │   ├── ibkr_exec_client.py (577 LOC) ✓ TESTED
+  │   └── throttling.py (18 LOC)
+  ├── intents/
+  │   └── risk_checks.py (30 LOC)
+  ├── learning/
+  │   └── lambda_online.py (17 LOC)
+  └── validation/
+      └── message_validator.py
+
+/apps/strategy_loop/ (411 LOC, 0 tests)
+  ├── main.py (38 LOC)
+  └── validation/
+      └── message_validator.py (373 LOC)
+
+/contracts/ (880 LOC, 538 LOC tests)
+  ├── validators.py (383 LOC) - Pydantic models (partial test coverage)
+  └── schema_validator.py (497 LOC) ✓ TESTED
+
+/shared/ (3 LOC, 0 tests)
+  └── logging.py (3 LOC) - STUB
+
+==============================================================================
+TEST FILES BY STATUS
+==============================================================================
+
+ACTIVE TEST FILES (2,298 LOC total):
+  ✓ tests/test_ibkr_exec_client.py (510 LOC) - Integration/Unit
+  ✓ tests/test_schema_validation.py (538 LOC) - Unit
+  ✓ tests/property/test_qp_properties.py (336 LOC) - Property-based
+  ✓ tests/metamorphic/test_mt_scaling.py (154 LOC) - Metamorphic
+  ✓ tests/metamorphic/test_mt_noise.py (187 LOC) - Metamorphic
+  ✓ tests/conftest.py (272 LOC) - Fixtures/Configuration
+  ✓ tests/e2e/ibkr_mock.py (301 LOC) - E2E Support
+
+PLACEHOLDER FILES (0 LOC):
+  ✗ tests/test_signals.py (0 LOC) - EMPTY
+  ✗ tests/test_simulation.py (0 LOC) - EMPTY
+  ✗ tests/test_qp_solver.py (0 LOC) - EMPTY
+
+==============================================================================
+TEST INFRASTRUCTURE
+==============================================================================
+
+Configuration:
+  • pytest.ini - Test discovery, markers, plugins, timeout (60s)
+  • .coveragerc - Coverage config (algo_trade, data_plane, order_plane)
+
+Fixtures (conftest.py):
+  • set_random_seeds() - Session-scoped deterministic seeding
+  • sample_market_data() - 100-day OHLCV synthetic data
+  • sample_returns() - Returns from market data
+  • default_config() - Strategy parameters
+  • mock_ibkr_client() - Full IBKR client mock
+
+Hypothesis Strategies:
+  • returns_array() - Realistic (n_periods, n_assets) returns
+  • mu_vector() - Expected returns vector
+  • covariance_matrix() - Positive semi-definite matrices
+
+Test Markers:
+  • @pytest.mark.unit - Unit tests
+  • @pytest.mark.property - Property-based tests
+  • @pytest.mark.metamorphic - Metamorphic tests
+  • @pytest.mark.integration - Integration tests
+  • @pytest.mark.e2e - End-to-end tests
+  • @pytest.mark.chaos - Chaos engineering tests
+  • @pytest.mark.performance - Performance tests
+  • @pytest.mark.slow - Slow-running tests (>1s)
+  • @pytest.mark.requires_kafka
+  • @pytest.mark.requires_ibkr
+
+==============================================================================
+COVERAGE METRICS
+==============================================================================
+
+Current State:
+  • Production LOC: ~6,000
+  • Test LOC: ~2,300 (38% of production)
+  • Tested modules: 3/40 (7.5%)
+  • Module coverage by subsystem:
+    - Signals: 0%
+    - Risk: 0%
+    - Optimization: <5% (property tests only)
+    - Execution: >90% (order_plane only)
+    - Data Plane: 0%
+    - Strategy: 0%
+    - Contracts: ~60% (schema validation tested)
+
+Gap by Subsystem (LOC):
+  • Signals: 494 LOC, 0 tests → need 400-500 tests
+  • Risk: 357 LOC, 0 tests → need 400-500 tests
+  • Optimization: 337 LOC, ~336 tests → need 400-500 tests
+  • Execution: 280 LOC, 510 tests → adequate
+  • Data Plane: 388 LOC, 0 tests → need 300-400 tests
+  • Strategy: 411 LOC, 0 tests → need 200-300 tests
+  • Order Plane: 694 LOC, 510 tests → need 100-200 additional
+  • Contracts: 880 LOC, 538 tests → need 200-300 additional
+
+==============================================================================
