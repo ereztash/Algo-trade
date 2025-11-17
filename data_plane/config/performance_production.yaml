@@ -1,0 +1,252 @@
+# Production Performance Configuration
+# Optimized for <200ms end-to-end latency with high throughput
+
+performance:
+  # SLA Targets
+  sla:
+    end_to_end_latency_ms: 200  # Primary target
+    market_data_p95_ms: 50  # Market data processing
+    signal_generation_p95_ms: 80  # Signal computation
+    order_placement_p95_ms: 100  # Order submission
+    risk_check_p95_ms: 5  # Risk validation
+
+  # Timeout Configuration
+  timeouts:
+    order_placement_ms: 100  # Aggressive timeout for order placement
+    market_data_fetch_ms: 500  # Market data request timeout
+    risk_check_ms: 10  # Fast fail for risk checks
+    signal_computation_ms: 150  # Signal processing timeout
+
+  # Caching Configuration
+  caching:
+    risk_check_ttl_seconds: 1.0  # Risk check cache TTL
+    signal_cache_size: 1000  # Number of cached signal computations
+    market_data_cache_ttl_seconds: 0.5  # Very short for freshness
+
+  # Batching Configuration
+  batching:
+    enabled: true
+    order_batch_window_ms: 10  # Collect orders for 10ms
+    max_order_batch_size: 50  # Max orders per batch
+    market_data_batch_size: 100  # Batch market data updates
+
+  # Circuit Breaker Configuration
+  circuit_breaker:
+    failure_threshold: 5  # Open after 5 failures
+    timeout_seconds: 60  # Stay open for 60s
+    half_open_attempts: 3  # Test with 3 attempts
+
+  # Threading and Parallelism
+  parallelism:
+    signal_processing_workers: 4  # Parallel signal computation
+    max_concurrent_orders: 100  # Max concurrent order placements
+    io_thread_pool_size: 8  # I/O operations thread pool
+
+  # Memory Management
+  memory:
+    max_in_flight_orders: 1000  # Limit in-flight orders
+    rolling_window_limit: 252  # Max rolling window size (trading days)
+    gc_interval_seconds: 60  # Force GC every minute
+
+
+# Data Plane Performance Settings
+data_plane:
+  # Market Data Processing
+  market_data:
+    processing_mode: streaming  # streaming vs batch
+    buffer_size: 1000  # Buffer size for streaming
+    flush_interval_ms: 100  # Flush every 100ms
+
+    # Quality vs Speed Tradeoff
+    validation_mode: fast  # fast, normal, thorough
+    skip_duplicate_check: false
+    enable_compression: true
+
+  # OFI Calculation
+  ofi:
+    calculation_interval_ms: 50  # Calculate OFI every 50ms
+    rolling_window_size: 20  # OFI window
+    enable_caching: true
+
+  # Storage
+  storage:
+    write_mode: async  # async vs sync
+    batch_write_size: 100  # Batch writes
+    flush_interval_ms: 1000  # Flush every 1s
+
+
+# Strategy Plane Performance Settings
+strategy_plane:
+  # Signal Generation
+  signals:
+    computation_mode: optimized  # optimized vs standard
+    use_parallel: true  # Parallel signal computation
+    max_workers: 4  # Number of parallel workers
+
+    # Orthogonalization
+    orthogonalization:
+      method: qr  # qr (fast) vs ols (accurate)
+      use_cache: true
+      cache_size: 100
+
+    # MIS Calculation
+    mis:
+      window_size: 20  # Rolling window for IC
+      update_frequency_ms: 1000  # Update every 1s
+
+  # Portfolio Optimization
+  optimization:
+    solver: osqp  # osqp (fast) vs cvxopt (accurate)
+    max_iterations: 100  # Solver iterations
+    tolerance: 1e-6  # Convergence tolerance
+    warm_start: true  # Use previous solution
+
+  # Regime Detection
+  regime:
+    detection_interval_ms: 5000  # Check every 5s (not latency-critical)
+    window_size: 60  # Days for regime detection
+
+
+# Order Plane Performance Settings
+order_plane:
+  # Order Processing
+  orders:
+    processing_mode: async  # async vs sync
+    enable_batching: true
+    batch_window_ms: 10  # 10ms batching window
+
+    # Risk Checks
+    risk_checks:
+      parallel_execution: true
+      cache_enabled: true
+      cache_ttl_seconds: 1.0
+      timeout_ms: 10
+
+    # Throttling
+    throttling:
+      pov_cap: 0.08  # 8% of volume
+      adv_cap: 0.10  # 10% of ADV
+      check_interval_ms: 100
+
+  # Execution
+  execution:
+    connection_pool_size: 10  # IBKR connection pool
+    max_retries: 2  # Order placement retries
+    retry_backoff_ms: 50  # Backoff between retries
+
+
+# Monitoring and Alerting
+monitoring:
+  # Metrics Collection
+  metrics:
+    collection_interval_ms: 1000  # Collect every 1s
+    aggregation_window_seconds: 60  # Aggregate over 1min
+    export_interval_seconds: 10  # Export every 10s
+
+  # Latency Tracking
+  latency_tracking:
+    enabled: true
+    track_percentiles: [50, 95, 99]  # Track P50, P95, P99
+    histogram_buckets: [10, 25, 50, 100, 200, 500, 1000]  # ms buckets
+
+  # Alerts
+  alerts:
+    # SLA Violations
+    - name: sla_violation
+      condition: p95_latency_ms > 200
+      cooldown_seconds: 60
+
+    # Circuit Breaker
+    - name: circuit_breaker_open
+      condition: circuit_breaker_state == OPEN
+      cooldown_seconds: 300
+
+    # High Error Rate
+    - name: high_error_rate
+      condition: error_rate > 0.05  # 5% errors
+      window_seconds: 60
+      cooldown_seconds: 120
+
+    # Throughput Drop
+    - name: throughput_drop
+      condition: orders_per_second < 10
+      window_seconds: 60
+      cooldown_seconds: 120
+
+
+# Resource Limits (Production)
+resources:
+  # CPU
+  cpu:
+    max_cpu_percent: 80  # Alert if > 80% CPU
+    affinity: [0, 1, 2, 3]  # Pin to specific cores
+
+  # Memory
+  memory:
+    max_memory_mb: 4096  # 4GB limit
+    warning_threshold_mb: 3072  # Warn at 3GB
+
+  # Network
+  network:
+    max_connections: 1000
+    connection_timeout_ms: 5000
+    keep_alive: true
+
+
+# Debugging and Profiling (disable in production)
+debugging:
+  enabled: false
+  profiling_enabled: false
+  detailed_logging: false
+  trace_every_nth_order: 100  # Only trace every 100th order
+
+
+# Feature Flags
+features:
+  # Performance Features
+  enable_caching: true
+  enable_batching: true
+  enable_parallel_processing: true
+  enable_circuit_breakers: true
+
+  # Safety Features
+  enable_risk_checks: true
+  enable_kill_switches: true
+  enable_position_limits: true
+
+  # Monitoring
+  enable_metrics: true
+  enable_latency_tracking: true
+  enable_alerts: true
+
+
+# Optimization Recommendations
+recommendations: |
+  1. Latency Budget (200ms total):
+     - Kafka messaging: ~40ms
+     - Market data processing: ~30ms
+     - Signal generation: ~60ms
+     - Risk checks: ~5ms
+     - Order placement: ~50ms
+     - Buffer: ~15ms
+
+  2. Tuning Priorities:
+     - Use QR decomposition for signal orthogonalization (3-5x faster)
+     - Enable risk check caching (reduces latency by 80%)
+     - Use batching for orders (improves throughput)
+     - Set aggressive timeouts (fail fast)
+     - Enable circuit breakers (prevent cascading failures)
+
+  3. Monitoring Focus:
+     - Track P95 latency continuously
+     - Alert on SLA violations
+     - Monitor cache hit rates
+     - Track circuit breaker state
+
+  4. Production Checklist:
+     - [ ] Disable debugging features
+     - [ ] Enable all circuit breakers
+     - [ ] Configure alerts
+     - [ ] Set resource limits
+     - [ ] Test failover scenarios
+     - [ ] Benchmark under load
