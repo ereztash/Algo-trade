@@ -4,3 +4,7 @@ cvxpy
 pyyaml
 scipy
 scikit-learn
+ib-insync
+pytest
+pytest-asyncio
+pydantic
