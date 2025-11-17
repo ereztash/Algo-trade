@@ -307,16 +307,57 @@ jobs:
       - name: Check coverage threshold
         run: |
           echo "Checking coverage threshold (80%)..."
-          # This will be properly implemented once we have actual test coverage
-          echo "⚠️  Coverage gate: Currently in monitoring mode"
-          echo "✅ Will enforce 80% coverage threshold once test suite is complete"
+
+          # Parse coverage from coverage.xml (if exists)
+          if [ -f coverage.xml ]; then
+            COVERAGE=$(python -c "
+            import xml.etree.ElementTree as ET
+            try:
+                tree = ET.parse('coverage.xml')
+                root = tree.getroot()
+                line_rate = float(root.attrib.get('line-rate', 0))
+                coverage_pct = line_rate * 100
+                print(f'{coverage_pct:.2f}')
+            except:
+                print('0.00')
+            ")
+
+            echo "Current coverage: ${COVERAGE}%"
+
+            # Enforce 80% threshold
+            if (( $(echo "$COVERAGE < 80.0" | bc -l) )); then
+              echo "::error::Coverage ${COVERAGE}% is below 80% threshold"
+              echo "❌ Coverage gate FAILED"
+              exit 1
+            else
+              echo "✅ Coverage gate PASSED (${COVERAGE}% >= 80%)"
+            fi
+          else
+            echo "⚠️  No coverage.xml found, skipping enforcement"
+            echo "Note: Coverage enforcement will activate when tests are run"
+          fi
 
       - name: Comment PR with coverage
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v6
         with:
           script: |
-            const message = '## Coverage Report\n\n⚠️ Coverage enforcement coming soon.\n\n**Target:** 80% coverage\n**Status:** Monitoring mode';
+            // Parse coverage.xml if exists
+            const fs = require('fs');
+            let coverageMsg = '⚠️ Coverage data not available';
+
+            if (fs.existsSync('coverage.xml')) {
+              const xml = fs.readFileSync('coverage.xml', 'utf8');
+              const match = xml.match(/line-rate="([\d.]+)"/);
+              if (match) {
+                const coverage = (parseFloat(match[1]) * 100).toFixed(2);
+                const status = coverage >= 80 ? '✅ PASS' : '❌ FAIL';
+                coverageMsg = `**Coverage:** ${coverage}% - ${status}\n**Target:** 80%`;
+              }
+            }
+
+            const message = `## 📊 Coverage Report\n\n${coverageMsg}\n\n**Enforcement:** Active - PR will be blocked if coverage < 80%`;
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -363,11 +404,108 @@ jobs:
         run: |
           pytest tests/contracts/ -v --tb=short || echo "Contract tests will be implemented"
 
+  quality-gates:
+    needs: [unit-tests, property-tests, metamorphic-tests, integration-tests, e2e-tests, coverage-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download all test results
+        uses: actions/download-artifact@v3
+        with:
+          path: test-results/
+
+      - name: Calculate test pass rate
+        id: test_metrics
+        run: |
+          echo "Calculating test metrics..."
+
+          # Count total tests and failures from JUnit XML files
+          TOTAL_TESTS=0
+          FAILED_TESTS=0
+
+          for junit_file in $(find test-results/ -name "*.xml" 2>/dev/null || true); do
+            if [ -f "$junit_file" ]; then
+              # Parse JUnit XML (simplified - assumes <testsuites> format)
+              TESTS=$(grep -oP 'tests="\K[0-9]+' "$junit_file" 2>/dev/null || echo "0")
+              FAILURES=$(grep -oP 'failures="\K[0-9]+' "$junit_file" 2>/dev/null || echo "0")
+              ERRORS=$(grep -oP 'errors="\K[0-9]+' "$junit_file" 2>/dev/null || echo "0")
+
+              TOTAL_TESTS=$((TOTAL_TESTS + TESTS))
+              FAILED_TESTS=$((FAILED_TESTS + FAILURES + ERRORS))
+            fi
+          done
+
+          if [ $TOTAL_TESTS -gt 0 ]; then
+            PASSED_TESTS=$((TOTAL_TESTS - FAILED_TESTS))
+            PASS_RATE=$(awk "BEGIN {printf \"%.2f\", ($PASSED_TESTS / $TOTAL_TESTS) * 100}")
+
+            echo "total_tests=$TOTAL_TESTS" >> $GITHUB_OUTPUT
+            echo "passed_tests=$PASSED_TESTS" >> $GITHUB_OUTPUT
+            echo "failed_tests=$FAILED_TESTS" >> $GITHUB_OUTPUT
+            echo "pass_rate=$PASS_RATE" >> $GITHUB_OUTPUT
+
+            echo "📊 Test Metrics:"
+            echo "  Total Tests: $TOTAL_TESTS"
+            echo "  Passed: $PASSED_TESTS"
+            echo "  Failed: $FAILED_TESTS"
+            echo "  Pass Rate: ${PASS_RATE}%"
+
+            # Enforce 95% pass rate (allowing up to 5% flaky tests)
+            if (( $(echo "$PASS_RATE < 95.0" | bc -l) )); then
+              echo "::error::Test pass rate ${PASS_RATE}% is below 95% threshold"
+              echo "❌ Quality gate FAILED"
+              exit 1
+            else
+              echo "✅ Quality gate PASSED (${PASS_RATE}% >= 95%)"
+            fi
+          else
+            echo "⚠️  No test results found"
+            echo "total_tests=0" >> $GITHUB_OUTPUT
+            echo "pass_rate=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment PR with quality metrics
+        if: github.event_name == 'pull_request' && steps.test_metrics.outputs.total_tests != '0'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const totalTests = '${{ steps.test_metrics.outputs.total_tests }}';
+            const passedTests = '${{ steps.test_metrics.outputs.passed_tests }}';
+            const failedTests = '${{ steps.test_metrics.outputs.failed_tests }}';
+            const passRate = '${{ steps.test_metrics.outputs.pass_rate }}';
+
+            const status = parseFloat(passRate) >= 95 ? '✅ PASS' : '❌ FAIL';
+
+            const message = `## 🎯 Quality Gates Summary
+
+            ### Test Metrics
+            - **Total Tests:** ${totalTests}
+            - **Passed:** ${passedTests}
+            - **Failed:** ${failedTests}
+            - **Pass Rate:** ${passRate}% - ${status}
+
+            ### Quality Thresholds
+            - ✅ Coverage: ≥80% (enforced)
+            - ✅ Test Pass Rate: ≥95% (enforced)
+
+            **Status:** ${parseFloat(passRate) >= 95 ? 'All quality gates passed ✅' : 'Quality gates FAILED ❌'}
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
+        continue-on-error: true
+
   all-tests-passed:
-    needs: [lint, security, unit-tests, property-tests, metamorphic-tests, integration-tests, e2e-tests, coverage-gate, contract-tests]
+    needs: [lint, security, unit-tests, property-tests, metamorphic-tests, integration-tests, e2e-tests, coverage-gate, contract-tests, quality-gates]
     runs-on: ubuntu-latest
     steps:
       - name: All tests passed
         run: |
           echo "✅ All test suites passed successfully!"
+          echo "✅ All quality gates passed!"
           echo "Ready for merge (pending manual approval if needed)"
