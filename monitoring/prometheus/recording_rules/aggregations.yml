@@ -1,0 +1,145 @@
+# Recording Rules - Pre-computed aggregations for performance
+groups:
+  - name: latency_aggregations
+    interval: 30s
+    rules:
+      # Data plane latency percentiles
+      - record: data_ingestion:latency_ms:p50
+        expr: histogram_quantile(0.50, rate(data_ingestion_latency_ms_bucket[5m]))
+
+      - record: data_ingestion:latency_ms:p95
+        expr: histogram_quantile(0.95, rate(data_ingestion_latency_ms_bucket[5m]))
+
+      - record: data_ingestion:latency_ms:p99
+        expr: histogram_quantile(0.99, rate(data_ingestion_latency_ms_bucket[5m]))
+
+      # Order latency percentiles
+      - record: order:latency_ms:p50
+        expr: histogram_quantile(0.50, rate(order_latency_ms_bucket[5m]))
+
+      - record: order:latency_ms:p95
+        expr: histogram_quantile(0.95, rate(order_latency_ms_bucket[5m]))
+
+      - record: order:latency_ms:p99
+        expr: histogram_quantile(0.99, rate(order_latency_ms_bucket[5m]))
+
+  - name: throughput_aggregations
+    interval: 30s
+    rules:
+      # Data ingestion rates
+      - record: data_ingestion:events_per_second
+        expr: rate(data_ingestion_events_total[1m])
+
+      - record: data_ingestion:bytes_per_second
+        expr: rate(data_ingestion_bytes_total[1m])
+
+      # Order flow rates
+      - record: orders:submitted_per_second
+        expr: rate(orders_total{status="submitted"}[1m])
+
+      - record: orders:filled_per_second
+        expr: rate(orders_total{status="filled"}[1m])
+
+      - record: orders:rejected_per_second
+        expr: rate(orders_total{status="rejected"}[1m])
+
+  - name: quality_aggregations
+    interval: 1m
+    rules:
+      # Average data quality by dimension
+      - record: data_quality:avg_by_dimension
+        expr: avg(data_quality_score) by (dimension)
+
+      # Overall data quality score
+      - record: data_quality:overall
+        expr: avg(data_quality_score)
+
+      # Fill rate by order type
+      - record: fill_rate:by_order_type
+        expr: avg(fill_rate_percent) by (order_type)
+
+  - name: error_rate_aggregations
+    interval: 30s
+    rules:
+      # Data plane error rates
+      - record: data_plane:errors_per_second
+        expr: rate(data_normalization_errors_total[5m])
+
+      - record: data_plane:ntp_rejects_per_second
+        expr: rate(ntp_rejects_total[5m])
+
+      # Strategy plane error rates
+      - record: strategy_plane:optimization_errors_per_second
+        expr: rate(optimization_errors_total[5m])
+
+      # Order plane error rates
+      - record: order_plane:risk_rejects_per_second
+        expr: rate(risk_check_rejects_total[5m])
+
+      - record: order_plane:ibkr_errors_per_second
+        expr: rate(ibkr_api_errors_total[5m])
+
+  - name: portfolio_aggregations
+    interval: 1m
+    rules:
+      # Portfolio metrics aggregations
+      - record: portfolio:total_exposure_usd
+        expr: sum(portfolio_exposure_usd) by (asset_class)
+
+      - record: portfolio:position_count
+        expr: count(position_quantity > 0)
+
+      - record: portfolio:average_position_value
+        expr: avg(position_value_usd)
+
+  - name: system_resource_aggregations
+    interval: 30s
+    rules:
+      # System resource utilization
+      - record: system:cpu_usage:avg
+        expr: avg(system_cpu_usage_percent)
+
+      - record: system:memory_usage:avg
+        expr: avg(system_memory_usage_percent)
+
+      - record: system:disk_usage:max
+        expr: max(system_disk_usage_percent)
+
+  - name: sla_compliance
+    interval: 1m
+    rules:
+      # SLA compliance metrics
+      - record: sla:data_latency_compliance
+        expr: |
+          (
+            sum(rate(data_ingestion_latency_ms_bucket{le="250"}[5m]))
+            /
+            sum(rate(data_ingestion_latency_ms_count[5m]))
+          )
+
+      - record: sla:order_latency_compliance
+        expr: |
+          (
+            sum(rate(order_latency_ms_bucket{le="500"}[5m]))
+            /
+            sum(rate(order_latency_ms_count[5m]))
+          )
+
+      - record: sla:fill_rate_compliance
+        expr: avg(fill_rate_percent >= 85)
+
+  - name: availability
+    interval: 30s
+    rules:
+      # Service availability (uptime percentage)
+      - record: availability:data_plane
+        expr: avg_over_time(up{job="data-plane"}[5m])
+
+      - record: availability:strategy_plane
+        expr: avg_over_time(up{job="strategy-plane"}[5m])
+
+      - record: availability:order_plane
+        expr: avg_over_time(up{job="order-plane"}[5m])
+
+      - record: availability:overall
+        expr: avg(avg_over_time(up{job=~".*-plane"}[5m]))

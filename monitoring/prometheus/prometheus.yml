@@ -1,0 +1,116 @@
+# Prometheus Configuration for Algo-Trading System
+global:
+  scrape_interval: 15s      # Scrape targets every 15 seconds
+  evaluation_interval: 15s  # Evaluate rules every 15 seconds
+  scrape_timeout: 10s       # Timeout after 10 seconds
+
+  # Attach labels to all time series
+  external_labels:
+    cluster: 'algo-trade'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+
+# Load alerting rules
+rule_files:
+  - '/etc/prometheus/alerts/*.yml'
+  - '/etc/prometheus/recording_rules/*.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # Alertmanager
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+        labels:
+          service: 'alertmanager'
+
+  # Node Exporter - System metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node-exporter'
+          instance: 'algo-trade-host'
+
+  # Pushgateway - Batch jobs
+  - job_name: 'pushgateway'
+    honor_labels: true
+    static_configs:
+      - targets: ['pushgateway:9091']
+        labels:
+          service: 'pushgateway'
+
+  # Data Plane - Market data ingestion & QA
+  - job_name: 'data-plane'
+    scrape_interval: 5s  # More frequent for real-time data
+    static_configs:
+      - targets: ['data-plane:9090']  # Adjust to actual host:port
+        labels:
+          service: 'data-plane'
+          plane: 'data'
+    # If data plane is running on host (not Docker), use this instead:
+    # static_configs:
+    #   - targets: ['host.docker.internal:9090']
+
+  # Strategy Plane - Signal generation & portfolio optimization
+  - job_name: 'strategy-plane'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['strategy-plane:9090']  # Adjust to actual host:port
+        labels:
+          service: 'strategy-plane'
+          plane: 'strategy'
+
+  # Order Plane - Order execution & risk checks
+  - job_name: 'order-plane'
+    scrape_interval: 5s  # More frequent for execution monitoring
+    static_configs:
+      - targets: ['order-plane:9090']  # Adjust to actual host:port
+        labels:
+          service: 'order-plane'
+          plane: 'order'
+
+  # Kafka JMX Metrics (if Kafka is deployed with JMX exporter)
+  # - job_name: 'kafka'
+  #   static_configs:
+  #     - targets: ['kafka:7071']
+  #       labels:
+  #         service: 'kafka'
+
+  # Service discovery via file (for dynamic service discovery)
+  # This allows adding/removing targets without restarting Prometheus
+  - job_name: 'file-sd'
+    file_sd_configs:
+      - files:
+          - '/etc/prometheus/targets/*.json'
+          - '/etc/prometheus/targets/*.yml'
+        refresh_interval: 30s
+
+# Remote write configuration (optional - for long-term storage)
+# remote_write:
+#   - url: "http://cortex:9009/api/prom/push"
+#     queue_config:
+#       capacity: 10000
+#       max_shards: 5
+#       min_shards: 1
+#       max_samples_per_send: 5000
+#       batch_send_deadline: 5s
+#       min_backoff: 30ms
+#       max_backoff: 100ms
+
+# Remote read configuration (optional - for querying long-term storage)
+# remote_read:
+#   - url: "http://cortex:9009/api/prom/read"

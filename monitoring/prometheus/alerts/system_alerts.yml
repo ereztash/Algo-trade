@@ -1,0 +1,92 @@
+# System Health Alert Rules
+groups:
+  - name: system_health
+    interval: 15s
+    rules:
+      # Service Down Alerts
+      - alert: ServiceDown
+        expr: up{job=~"data-plane|strategy-plane|order-plane"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} on {{ $labels.instance }} has been down for more than 1 minute."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/service_down.md"
+
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: system_cpu_usage_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: resource
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% (threshold: 85%) for more than 5 minutes."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/high_cpu.md"
+
+      - alert: CriticalCPUUsage
+        expr: system_cpu_usage_percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          category: resource
+        annotations:
+          summary: "Critical CPU usage detected"
+          description: "CPU usage is {{ $value }}% (threshold: 95%) for more than 2 minutes. System may become unresponsive."
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: system_memory_usage_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: resource
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}% (threshold: 85%) for more than 5 minutes."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/high_memory.md"
+
+      - alert: CriticalMemoryUsage
+        expr: system_memory_usage_percent > 95
+        for: 1m
+        labels:
+          severity: critical
+          category: resource
+        annotations:
+          summary: "Critical memory usage - OOM risk"
+          description: "Memory usage is {{ $value }}% (threshold: 95%). Risk of OOM kill."
+
+      # Disk Space Alerts
+      - alert: LowDiskSpace
+        expr: system_disk_usage_percent{mount_point="/"} > 80
+        for: 10m
+        labels:
+          severity: warning
+          category: resource
+        annotations:
+          summary: "Low disk space on {{ $labels.mount_point }}"
+          description: "Disk usage on {{ $labels.mount_point }} is {{ $value }}% (threshold: 80%)."
+
+      - alert: CriticalDiskSpace
+        expr: system_disk_usage_percent{mount_point="/"} > 90
+        for: 5m
+        labels:
+          severity: critical
+          category: resource
+        annotations:
+          summary: "Critical disk space on {{ $labels.mount_point }}"
+          description: "Disk usage on {{ $labels.mount_point }} is {{ $value }}% (threshold: 90%). System may fail soon."
+
+      # Service Health Alerts
+      - alert: ServiceUnhealthy
+        expr: service_health_status == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: health
+        annotations:
+          summary: "Service {{ $labels.service }} is unhealthy"
+          description: "Health check for {{ $labels.service }} has been failing for 2 minutes."

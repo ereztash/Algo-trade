@@ -1,0 +1,160 @@
+# Strategy Plane Alert Rules
+groups:
+  - name: strategy_plane
+    interval: 15s
+    rules:
+      # Signal Generation Performance
+      - alert: SlowSignalGeneration
+        expr: histogram_quantile(0.95, rate(signal_generation_duration_ms_bucket[5m])) > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          plane: strategy
+        annotations:
+          summary: "Slow signal generation (p95)"
+          description: "P95 signal generation time for {{ $labels.signal_type }} is {{ $value }}ms (threshold: 100ms)."
+
+      # Portfolio Value Alerts
+      - alert: PortfolioValueDrop
+        expr: (portfolio_value_usd - portfolio_value_usd offset 1h) / portfolio_value_usd offset 1h < -0.05
+        for: 5m
+        labels:
+          severity: warning
+          category: pnl
+          plane: strategy
+        annotations:
+          summary: "Portfolio value dropped significantly"
+          description: "Portfolio value dropped by {{ $value | humanizePercentage }} in the last hour."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/portfolio_drop.md"
+
+      - alert: CriticalPortfolioValueDrop
+        expr: (portfolio_value_usd - portfolio_value_usd offset 1h) / portfolio_value_usd offset 1h < -0.10
+        for: 2m
+        labels:
+          severity: critical
+          category: pnl
+          plane: strategy
+        annotations:
+          summary: "Critical portfolio value drop"
+          description: "Portfolio value dropped by {{ $value | humanizePercentage }} in the last hour. Kill switch should trigger."
+
+      # Drawdown Alerts
+      - alert: HighDrawdown
+        expr: portfolio_max_drawdown_percent > 10
+        for: 2m
+        labels:
+          severity: warning
+          category: risk
+          plane: strategy
+        annotations:
+          summary: "High portfolio drawdown"
+          description: "Maximum drawdown is {{ $value }}% (threshold: 10%)."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/drawdown.md"
+
+      - alert: CriticalDrawdown
+        expr: portfolio_max_drawdown_percent > 15
+        for: 1m
+        labels:
+          severity: critical
+          category: risk
+          plane: strategy
+        annotations:
+          summary: "Critical portfolio drawdown - kill switch triggered"
+          description: "Maximum drawdown is {{ $value }}% (kill switch threshold: 15%). Trading should be halted."
+
+      # Sharpe Ratio Degradation
+      - alert: LowSharpeRatio
+        expr: portfolio_sharpe_ratio{period="daily"} < 0.5
+        for: 1d
+        labels:
+          severity: warning
+          category: performance
+          plane: strategy
+        annotations:
+          summary: "Low Sharpe ratio"
+          description: "Daily Sharpe ratio is {{ $value }} (threshold: 0.5). Strategy performance degraded."
+
+      # Optimization Errors
+      - alert: HighOptimizationErrorRate
+        expr: rate(optimization_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: execution
+          plane: strategy
+        annotations:
+          summary: "High optimization error rate"
+          description: "Optimization error rate for {{ $labels.optimizer }} is {{ $value }} errors/sec (threshold: 0.1/sec)."
+
+      # Slow Optimization
+      - alert: SlowOptimization
+        expr: histogram_quantile(0.95, rate(optimization_duration_ms_bucket[5m])) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          plane: strategy
+        annotations:
+          summary: "Slow portfolio optimization"
+          description: "P95 optimization time for {{ $labels.optimizer }} is {{ $value }}ms (threshold: 1000ms)."
+
+      # Market Regime Changes
+      - alert: MarketRegimeStorm
+        expr: market_regime == 2
+        for: 1m
+        labels:
+          severity: warning
+          category: risk
+          plane: strategy
+        annotations:
+          summary: "Market regime changed to STORM"
+          description: "Market regime detection indicates STORM conditions. Risk parameters should be adjusted."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/market_regime.md"
+
+      # Frequent Regime Transitions
+      - alert: FrequentRegimeTransitions
+        expr: rate(regime_transitions_total[1h]) > 5
+        for: 30m
+        labels:
+          severity: warning
+          category: risk
+          plane: strategy
+        annotations:
+          summary: "Frequent market regime transitions"
+          description: "Market regime is transitioning {{ $value }} times/hour (threshold: 5/hour). Market conditions are unstable."
+
+      # Portfolio Concentration
+      - alert: HighPortfolioConcentration
+        expr: portfolio_positions > 50
+        for: 10m
+        labels:
+          severity: warning
+          category: risk
+          plane: strategy
+        annotations:
+          summary: "High number of portfolio positions"
+          description: "Portfolio has {{ $value }} positions (threshold: 50). May indicate over-diversification or control issue."
+
+      - alert: LowPortfolioDiversification
+        expr: portfolio_positions < 5
+        for: 10m
+        labels:
+          severity: warning
+          category: risk
+          plane: strategy
+        annotations:
+          summary: "Low portfolio diversification"
+          description: "Portfolio has only {{ $value }} positions (threshold: 5). Concentration risk is high."
+
+      # PnL Alerts
+      - alert: DailyLossExceeded
+        expr: portfolio_pnl_usd{period="daily"} < -10000
+        for: 1m
+        labels:
+          severity: critical
+          category: pnl
+          plane: strategy
+        annotations:
+          summary: "Daily loss limit exceeded"
+          description: "Daily PnL is {{ $value }} USD (threshold: -10000 USD). Consider halting trading."
