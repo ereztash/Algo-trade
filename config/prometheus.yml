@@ -1,0 +1,149 @@
+# Prometheus Configuration for Algo-Trade Paper Trading Environment
+# =============================================================================
+
+global:
+  scrape_interval: 15s                # Default scrape interval
+  evaluation_interval: 15s            # Evaluate rules every 15 seconds
+  scrape_timeout: 10s
+
+  # External labels to add to all time series
+  external_labels:
+    cluster: 'algo-trade'
+    environment: 'paper'
+
+# Alertmanager configuration (optional - configure if using alerting)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - localhost:9093
+
+# Rule files (for alerting and recording rules)
+rule_files:
+  # - "alerts/*.yml"
+  # - "rules/*.yml"
+
+# Scrape configurations
+scrape_configs:
+
+  # =============================================================================
+  # Prometheus Self-Monitoring
+  # =============================================================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # =============================================================================
+  # Kafka JMX Metrics (via JMX Exporter)
+  # =============================================================================
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9101']
+        labels:
+          service: 'kafka'
+          component: 'broker'
+
+  # =============================================================================
+  # Application Metrics - Data Plane
+  # =============================================================================
+  - job_name: 'data-plane'
+    static_configs:
+      - targets: ['data-plane:9091']
+        labels:
+          service: 'data-plane'
+          plane: 'data'
+    # Only scrape if service is running (will fail gracefully if not)
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # =============================================================================
+  # Application Metrics - Strategy Plane
+  # =============================================================================
+  - job_name: 'strategy-plane'
+    static_configs:
+      - targets: ['strategy-plane:9091']
+        labels:
+          service: 'strategy-plane'
+          plane: 'strategy'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # =============================================================================
+  # Application Metrics - Order Plane
+  # =============================================================================
+  - job_name: 'order-plane'
+    static_configs:
+      - targets: ['order-plane:9091']
+        labels:
+          service: 'order-plane'
+          plane: 'order'
+    metrics_path: '/metrics'
+    scrape_interval: 5s                # More frequent for latency-sensitive metrics
+
+  # =============================================================================
+  # Kafka UI Metrics (if available)
+  # =============================================================================
+  # - job_name: 'kafka-ui'
+  #   static_configs:
+  #     - targets: ['kafka-ui:8080']
+  #       labels:
+  #         service: 'kafka-ui'
+
+# =============================================================================
+# Sample Alerting Rules (commented out - create alerts/*.yml to enable)
+# =============================================================================
+
+# Example alert rules (create file: alerts/algo-trade.yml)
+# groups:
+#   - name: algo_trade_alerts
+#     interval: 30s
+#     rules:
+#       # Kafka Consumer Lag Alert
+#       - alert: KafkaConsumerLagHigh
+#         expr: kafka_consumer_group_lag > 1000
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "Kafka consumer lag is high ({{ $value }} messages)"
+#           description: "Consumer group {{ $labels.group }} has high lag on topic {{ $labels.topic }}"
+#
+#       # Order Latency Alert
+#       - alert: OrderLatencyHigh
+#         expr: histogram_quantile(0.95, order_latency_ms_bucket) > 1000
+#         for: 2m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "Order latency p95 is above 1s ({{ $value }}ms)"
+#
+#       # IBKR Connection Down
+#       - alert: IBKRConnectionDown
+#         expr: ibkr_connection_status == 0
+#         for: 1m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "IBKR connection is down"
+#           description: "No connection to IBKR for 1 minute"
+#
+#       # DLQ Message Rate High
+#       - alert: DLQMessageRateHigh
+#         expr: rate(dlq_message_count[5m]) > 0.1
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "DLQ message rate is high ({{ $value }} msgs/sec)"
+#
+#       # PnL Kill Switch Triggered
+#       - alert: PnLKillSwitchTriggered
+#         expr: pnl_kill_switch_triggered == 1
+#         for: 1m
+#         labels:
+#           severity: critical
+#         annotations:
+#           summary: "PnL kill switch has been triggered"
+#           description: "Trading stopped due to PnL breach"

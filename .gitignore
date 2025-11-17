@@ -136,6 +136,23 @@ reports/test_report.html
 secrets.yaml
 .secrets/
 
+# Docker & Infrastructure
+docker-compose.override.yml
+.docker/
+
+# Kafka & Monitoring Data (Docker volumes)
+kafka-data/
+zookeeper-data/
+zookeeper-logs/
+prometheus-data/
+grafana-data/
+
+# IBKR & Trading
+*.ibkr
+*.tws
+paper_trading_results/
+stage7_results/
+
 # Temporary files
 *.tmp
 *.bak

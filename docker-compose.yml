@@ -1,0 +1,238 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Message Bus - Apache Kafka
+  # =============================================================================
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    hostname: zookeeper
+    container_name: algo-trade-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - algo-trade-network
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka
+    container_name: algo-trade-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"      # External access (localhost)
+      - "9093:9093"      # Internal access (Docker network)
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # Listener Configuration
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9093,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # Topic Configuration Defaults
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'  # Manual topic creation for production
+      KAFKA_NUM_PARTITIONS: 3                    # Default partitions for parallelism
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1        # Single broker = replication 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+
+      # Performance & Retention
+      KAFKA_LOG_RETENTION_HOURS: 168             # 7 days default
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824        # 1GB segments
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000  # 5 minutes
+      KAFKA_COMPRESSION_TYPE: 'snappy'           # Default compression
+
+      # JVM Configuration
+      KAFKA_HEAP_OPTS: "-Xmx1G -Xms1G"           # 1GB heap (adjust based on load)
+
+      # Metrics & Monitoring
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+
+      # Offsets & Consumer Groups
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # Confluent Metrics Reporter (disable for open-source)
+      KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE: 'false'
+
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - algo-trade-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # =============================================================================
+  # Kafka UI - Web-based Kafka management
+  # =============================================================================
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: algo-trade-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: algo-trade-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9093
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    networks:
+      - algo-trade-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # Monitoring - Prometheus
+  # =============================================================================
+
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: algo-trade-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - algo-trade-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # Monitoring - Grafana
+  # =============================================================================
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: algo-trade-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/algo-trade-overview.json
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - algo-trade-network
+    restart: unless-stopped
+
+  # =============================================================================
+  # Application Services (commented out - for future use)
+  # =============================================================================
+
+  # data-plane:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: data-plane
+  #   container_name: algo-trade-data-plane
+  #   depends_on:
+  #     - kafka
+  #   environment:
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:9093
+  #     IBKR_HOST: ${IBKR_HOST:-127.0.0.1}
+  #     IBKR_PORT: ${IBKR_PORT:-4002}
+  #     IBKR_ACCOUNT_ID: ${IBKR_ACCOUNT_ID}
+  #     ENVIRONMENT: ${ENVIRONMENT:-dev}
+  #     LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  #   volumes:
+  #     - ./config:/app/config:ro
+  #     - ./logs:/app/logs
+  #   networks:
+  #     - algo-trade-network
+  #   restart: unless-stopped
+
+  # strategy-plane:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: strategy-plane
+  #   container_name: algo-trade-strategy-plane
+  #   depends_on:
+  #     - kafka
+  #   environment:
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:9093
+  #     ENVIRONMENT: ${ENVIRONMENT:-dev}
+  #     LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  #   volumes:
+  #     - ./config:/app/config:ro
+  #     - ./logs:/app/logs
+  #   networks:
+  #     - algo-trade-network
+  #   restart: unless-stopped
+
+  # order-plane:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     target: order-plane
+  #   container_name: algo-trade-order-plane
+  #   depends_on:
+  #     - kafka
+  #   environment:
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:9093
+  #     IBKR_HOST: ${IBKR_HOST:-127.0.0.1}
+  #     IBKR_PORT: ${IBKR_PORT:-4002}
+  #     IBKR_ACCOUNT_ID: ${IBKR_ACCOUNT_ID}
+  #     ENVIRONMENT: ${ENVIRONMENT:-dev}
+  #     LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  #   volumes:
+  #     - ./config:/app/config:ro
+  #     - ./logs:/app/logs
+  #   networks:
+  #     - algo-trade-network
+  #   restart: unless-stopped
+
+# =============================================================================
+# Networks
+# =============================================================================
+
+networks:
+  algo-trade-network:
+    driver: bridge
+    name: algo-trade-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+
+volumes:
+  zookeeper-data:
+    driver: local
+  zookeeper-logs:
+    driver: local
+  kafka-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
