@@ -4,3 +4,4 @@ cvxpy
 pyyaml
 scipy
 scikit-learn
+psutil>=5.9.0

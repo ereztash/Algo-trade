@@ -1,0 +1,220 @@
+# Order Plane Alert Rules
+groups:
+  - name: order_plane
+    interval: 10s
+    rules:
+      # Order Latency Alerts
+      - alert: HighOrderLatency
+        expr: histogram_quantile(0.95, rate(order_latency_ms_bucket[5m])) > 500
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          plane: order
+        annotations:
+          summary: "High order latency (p95)"
+          description: "P95 order latency for {{ $labels.order_type }} is {{ $value }}ms (threshold: 500ms)."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/order_latency.md"
+
+      - alert: CriticalOrderLatency
+        expr: histogram_quantile(0.99, rate(order_latency_ms_bucket[5m])) > 1000
+        for: 2m
+        labels:
+          severity: critical
+          category: performance
+          plane: order
+        annotations:
+          summary: "Critical order latency (p99)"
+          description: "P99 order latency for {{ $labels.order_type }} is {{ $value }}ms (threshold: 1000ms). Execution quality degraded."
+
+      # Fill Rate Alerts
+      - alert: LowFillRate
+        expr: fill_rate_percent < 85
+        for: 10m
+        labels:
+          severity: warning
+          category: execution
+          plane: order
+        annotations:
+          summary: "Low order fill rate"
+          description: "Fill rate for {{ $labels.order_type }} is {{ $value }}% (threshold: 85%)."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/low_fill_rate.md"
+
+      - alert: CriticalFillRate
+        expr: fill_rate_percent < 70
+        for: 5m
+        labels:
+          severity: critical
+          category: execution
+          plane: order
+        annotations:
+          summary: "Critical fill rate"
+          description: "Fill rate for {{ $labels.order_type }} is {{ $value }}% (threshold: 70%). Most orders are not filling."
+
+      # Order Rejection Alerts
+      - alert: HighOrderRejectionRate
+        expr: rate(orders_total{status="rejected"}[5m]) / rate(orders_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: execution
+          plane: order
+        annotations:
+          summary: "High order rejection rate"
+          description: "Order rejection rate is {{ $value | humanizePercentage }} (threshold: 10%)."
+
+      - alert: CriticalOrderRejectionRate
+        expr: rate(orders_total{status="rejected"}[5m]) / rate(orders_total[5m]) > 0.25
+        for: 2m
+        labels:
+          severity: critical
+          category: execution
+          plane: order
+        annotations:
+          summary: "Critical order rejection rate"
+          description: "Order rejection rate is {{ $value | humanizePercentage }} (threshold: 25%). System may be misconfigured."
+
+      # Risk Check Rejections
+      - alert: HighRiskCheckRejectionRate
+        expr: rate(risk_check_rejects_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: risk
+          plane: order
+        annotations:
+          summary: "High risk check rejection rate"
+          description: "Risk check rejection rate for {{ $labels.reason }} is {{ $value }} rejects/sec."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/risk_checks.md"
+
+      # Kill Switch Alerts
+      - alert: KillSwitchTriggered
+        expr: kill_switch_status == 1
+        for: 10s
+        labels:
+          severity: critical
+          category: risk
+          plane: order
+        annotations:
+          summary: "KILL SWITCH TRIGGERED - Trading Halted"
+          description: "Kill switch {{ $labels.switch_type }} has been triggered. All trading is halted."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/kill_switch.md"
+
+      - alert: FrequentKillSwitchTriggers
+        expr: rate(kill_switch_triggers_total[1h]) > 3
+        for: 10m
+        labels:
+          severity: critical
+          category: risk
+          plane: order
+        annotations:
+          summary: "Frequent kill switch triggers"
+          description: "Kill switch {{ $labels.trigger_type }} has triggered {{ $value }} times in the last hour. System instability."
+
+      # Slippage Alerts
+      - alert: HighSlippage
+        expr: histogram_quantile(0.95, rate(slippage_bps_bucket[10m])) > 10
+        for: 10m
+        labels:
+          severity: warning
+          category: execution
+          plane: order
+        annotations:
+          summary: "High execution slippage"
+          description: "P95 slippage for {{ $labels.symbol }} is {{ $value }} bps (threshold: 10 bps)."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/slippage.md"
+
+      - alert: CriticalSlippage
+        expr: histogram_quantile(0.95, rate(slippage_bps_bucket[10m])) > 25
+        for: 5m
+        labels:
+          severity: critical
+          category: execution
+          plane: order
+        annotations:
+          summary: "Critical execution slippage"
+          description: "P95 slippage for {{ $labels.symbol }} is {{ $value }} bps (threshold: 25 bps). Execution quality severely degraded."
+
+      # Transaction Cost Alerts
+      - alert: HighTransactionCosts
+        expr: histogram_quantile(0.95, rate(transaction_cost_bps_bucket[10m])) > 20
+        for: 10m
+        labels:
+          severity: warning
+          category: cost
+          plane: order
+        annotations:
+          summary: "High transaction costs"
+          description: "P95 transaction cost for {{ $labels.symbol }} is {{ $value }} bps (threshold: 20 bps)."
+
+      # IBKR Connection Alerts
+      - alert: IBKRDisconnected
+        expr: ibkr_connection_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: connectivity
+          plane: order
+        annotations:
+          summary: "IBKR connection lost"
+          description: "IBKR connection has been down for 1 minute. Cannot execute trades."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/ibkr_disconnect.md"
+
+      - alert: IBKRConnectionUnstable
+        expr: rate(ibkr_reconnects_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: connectivity
+          plane: order
+        annotations:
+          summary: "IBKR connection unstable"
+          description: "IBKR reconnection rate is {{ $value }} reconnects/sec. Connection is unstable."
+
+      # IBKR API Errors
+      - alert: HighIBKRErrorRate
+        expr: rate(ibkr_api_errors_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: api
+          plane: order
+        annotations:
+          summary: "High IBKR API error rate"
+          description: "IBKR API error rate for {{ $labels.error_code }} ({{ $labels.error_type }}) is {{ $value }} errors/sec."
+
+      - alert: CriticalIBKRErrorRate
+        expr: rate(ibkr_api_errors_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+          category: api
+          plane: order
+        annotations:
+          summary: "Critical IBKR API error rate"
+          description: "IBKR API error rate is {{ $value }} errors/sec. API integration may be broken."
+
+      # IBKR Throttling Alerts
+      - alert: IBKRThrottleViolations
+        expr: rate(ibkr_throttle_violations_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: throttling
+          plane: order
+        annotations:
+          summary: "IBKR throttle violations detected"
+          description: "IBKR throttle violation rate for {{ $labels.endpoint }} is {{ $value }} violations/sec."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/ibkr_throttling.md"
+
+      # Order Flow Alerts
+      - alert: NoOrdersSubmitted
+        expr: rate(orders_total[5m]) == 0
+        for: 30m
+        labels:
+          severity: warning
+          category: execution
+          plane: order
+        annotations:
+          summary: "No orders submitted recently"
+          description: "No orders have been submitted in the last 30 minutes. Strategy may be inactive or broken."

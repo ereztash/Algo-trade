@@ -1,0 +1,171 @@
+# Data Plane Alert Rules
+groups:
+  - name: data_plane
+    interval: 10s
+    rules:
+      # Data Ingestion Latency Alerts
+      - alert: HighDataLatency
+        expr: histogram_quantile(0.95, rate(data_ingestion_latency_ms_bucket[1m])) > 250
+        for: 2m
+        labels:
+          severity: warning
+          category: performance
+          plane: data
+        annotations:
+          summary: "High data ingestion latency (p95)"
+          description: "P95 data ingestion latency for {{ $labels.event_type }} is {{ $value }}ms (SLA: 250ms) for more than 2 minutes."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/high_latency.md"
+
+      - alert: CriticalDataLatency
+        expr: histogram_quantile(0.99, rate(data_ingestion_latency_ms_bucket[1m])) > 500
+        for: 1m
+        labels:
+          severity: critical
+          category: performance
+          plane: data
+        annotations:
+          summary: "Critical data ingestion latency (p99)"
+          description: "P99 data ingestion latency for {{ $labels.event_type }} is {{ $value }}ms (threshold: 500ms). Trading decisions may be stale."
+
+      # Data Quality Alerts
+      - alert: LowDataQuality
+        expr: data_quality_score < 0.95
+        for: 5m
+        labels:
+          severity: warning
+          category: quality
+          plane: data
+        annotations:
+          summary: "Low data quality score"
+          description: "Data quality score for {{ $labels.conid }} ({{ $labels.dimension }}) is {{ $value }} (threshold: 0.95)."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/data_quality.md"
+
+      - alert: CriticalDataQuality
+        expr: data_quality_score < 0.90
+        for: 2m
+        labels:
+          severity: critical
+          category: quality
+          plane: data
+        annotations:
+          summary: "Critical data quality score"
+          description: "Data quality score for {{ $labels.conid }} ({{ $labels.dimension }}) is {{ $value }} (threshold: 0.90). Data may be unreliable."
+
+      # Data Completeness Alerts
+      - alert: IncompleteData
+        expr: data_completeness_percent < 95
+        for: 5m
+        labels:
+          severity: warning
+          category: quality
+          plane: data
+        annotations:
+          summary: "Incomplete data detected"
+          description: "Data completeness for {{ $labels.conid }} is {{ $value }}% (threshold: 95%)."
+
+      # Data Gap Alerts
+      - alert: FrequentDataGaps
+        expr: rate(data_gaps_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: quality
+          plane: data
+        annotations:
+          summary: "Frequent data gaps detected"
+          description: "Data gap rate for {{ $labels.conid }} is {{ $value }} gaps/sec (threshold: 0.1/sec)."
+
+      # NTP Drift Alerts
+      - alert: HighNTPDrift
+        expr: abs(ntp_time_drift_ms) > 100
+        for: 2m
+        labels:
+          severity: warning
+          category: timing
+          plane: data
+        annotations:
+          summary: "High NTP time drift"
+          description: "NTP time drift is {{ $value }}ms (threshold: ±100ms). Time synchronization issue detected."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/ntp_drift.md"
+
+      - alert: CriticalNTPDrift
+        expr: abs(ntp_time_drift_ms) > 250
+        for: 1m
+        labels:
+          severity: critical
+          category: timing
+          plane: data
+        annotations:
+          summary: "Critical NTP time drift"
+          description: "NTP time drift is {{ $value }}ms (threshold: ±250ms). Timestamps are unreliable - kill switch may trigger."
+
+      # NTP Rejects Rate
+      - alert: HighNTPRejectRate
+        expr: rate(ntp_rejects_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          category: timing
+          plane: data
+        annotations:
+          summary: "High NTP reject rate"
+          description: "NTP reject rate is {{ $value }} rejects/sec (threshold: 0.01/sec). Time synchronization degraded."
+
+      # Kafka Lag Alerts
+      - alert: HighKafkaLag
+        expr: kafka_consumer_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: streaming
+          plane: data
+        annotations:
+          summary: "High Kafka consumer lag"
+          description: "Kafka consumer lag for {{ $labels.topic }}/{{ $labels.partition }} is {{ $value }} messages (threshold: 1000)."
+          runbook: "https://github.com/ereztash/Algo-trade/docs/runbooks/kafka_lag.md"
+
+      - alert: CriticalKafkaLag
+        expr: kafka_consumer_lag > 10000
+        for: 2m
+        labels:
+          severity: critical
+          category: streaming
+          plane: data
+        annotations:
+          summary: "Critical Kafka consumer lag"
+          description: "Kafka consumer lag for {{ $labels.topic }}/{{ $labels.partition }} is {{ $value }} messages. System is falling behind."
+
+      # Data Ingestion Rate Alerts (detect stalled feeds)
+      - alert: DataIngestionStalled
+        expr: rate(data_ingestion_events_total[1m]) == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+          plane: data
+        annotations:
+          summary: "Data ingestion stalled"
+          description: "No data ingestion events for {{ $labels.event_type }} in the last 2 minutes. Feed may be disconnected."
+
+      - alert: LowDataIngestionRate
+        expr: rate(data_ingestion_events_total[5m]) < 10
+        for: 5m
+        labels:
+          severity: warning
+          category: availability
+          plane: data
+        annotations:
+          summary: "Low data ingestion rate"
+          description: "Data ingestion rate for {{ $labels.event_type }} is {{ $value }} events/sec (threshold: 10/sec)."
+
+      # Normalization Error Rate
+      - alert: HighNormalizationErrorRate
+        expr: rate(data_normalization_errors_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          category: quality
+          plane: data
+        annotations:
+          summary: "High normalization error rate"
+          description: "Normalization error rate for {{ $labels.error_type }} is {{ $value }} errors/sec (threshold: 0.05/sec)."

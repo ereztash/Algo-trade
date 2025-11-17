@@ -1,0 +1,205 @@
+# Alertmanager Configuration
+global:
+  # Default values
+  resolve_timeout: 5m
+
+  # SMTP configuration (for email alerts)
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'algo-trade-alerts@example.com'
+  smtp_auth_username: 'algo-trade-alerts@example.com'
+  smtp_auth_password: 'YOUR_APP_PASSWORD_HERE'  # Use app-specific password
+  smtp_require_tls: true
+
+  # Slack webhook URL (configure in secrets)
+  # slack_api_url: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
+
+# Route configuration - how alerts are routed to receivers
+route:
+  # Default receiver for all alerts
+  receiver: 'default-receiver'
+
+  # Group alerts by these labels
+  group_by: ['alertname', 'severity', 'plane']
+
+  # How long to wait before sending initial notification
+  group_wait: 10s
+
+  # How long to wait before sending notification about new alerts added to group
+  group_interval: 10s
+
+  # How long to wait before re-sending notification
+  repeat_interval: 4h
+
+  # Child routes for specific alert types
+  routes:
+    # Critical alerts - immediate notification
+    - receiver: 'critical-alerts'
+      match:
+        severity: critical
+      group_wait: 5s
+      repeat_interval: 30m
+      continue: true  # Also send to default receiver
+
+    # Kill switch alerts - highest priority
+    - receiver: 'kill-switch-alerts'
+      match_re:
+        alertname: 'KillSwitch.*'
+      group_wait: 0s
+      repeat_interval: 15m
+      continue: true
+
+    # IBKR connection alerts - high priority
+    - receiver: 'ibkr-alerts'
+      match:
+        category: connectivity
+      group_wait: 5s
+      repeat_interval: 15m
+      continue: true
+
+    # Performance alerts - lower priority
+    - receiver: 'performance-alerts'
+      match:
+        category: performance
+      group_wait: 30s
+      repeat_interval: 12h
+
+    # Quality alerts
+    - receiver: 'quality-alerts'
+      match:
+        category: quality
+      group_wait: 1m
+      repeat_interval: 6h
+
+    # Resource alerts
+    - receiver: 'resource-alerts'
+      match:
+        category: resource
+      group_wait: 1m
+      repeat_interval: 6h
+
+# Inhibition rules - suppress certain alerts when others are firing
+inhibit_rules:
+  # Don't alert on service-specific issues if service is down
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match_re:
+      alertname: '.*'
+    equal: ['service']
+
+  # Don't alert on warning if critical alert is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service']
+
+  # Don't alert on high latency if data ingestion is stalled
+  - source_match:
+      alertname: 'DataIngestionStalled'
+    target_match:
+      alertname: 'HighDataLatency'
+
+  # Don't alert on individual errors if service is unhealthy
+  - source_match:
+      alertname: 'ServiceUnhealthy'
+    target_match_re:
+      category: '(performance|quality|execution)'
+    equal: ['service']
+
+# Receivers - notification destinations
+receivers:
+  # Default receiver (logs only, no notifications)
+  - name: 'default-receiver'
+    webhook_configs:
+      - url: 'http://localhost:5001/webhook/default'
+        send_resolved: true
+
+  # Critical alerts - email + Slack + PagerDuty
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'trading-team@example.com'
+        headers:
+          Subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>Critical Alert: {{ .GroupLabels.alertname }}</h2>
+          <p><strong>Severity:</strong> {{ .CommonLabels.severity }}</p>
+          <p><strong>Service:</strong> {{ .CommonLabels.service }}</p>
+          <p><strong>Description:</strong> {{ range .Alerts }}{{ .Annotations.description }}<br>{{ end }}</p>
+          <p><strong>Time:</strong> {{ .CommonAnnotations.startsAt }}</p>
+        send_resolved: true
+
+    # Slack notifications
+    # slack_configs:
+    #   - channel: '#trading-alerts-critical'
+    #     title: 'Critical Alert: {{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+    #     color: 'danger'
+    #     send_resolved: true
+
+    # PagerDuty integration
+    # pagerduty_configs:
+    #   - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+    #     description: '{{ .GroupLabels.alertname }}'
+
+  # Kill switch alerts - SMS + email + Slack
+  - name: 'kill-switch-alerts'
+    email_configs:
+      - to: 'trading-team@example.com,risk-team@example.com'
+        headers:
+          Subject: '[KILL SWITCH] Trading Halted - {{ .GroupLabels.alertname }}'
+        html: |
+          <h1 style="color: red;">⚠️ KILL SWITCH TRIGGERED ⚠️</h1>
+          <h2>{{ .GroupLabels.alertname }}</h2>
+          <p><strong>Trigger Type:</strong> {{ .CommonLabels.trigger_type }}</p>
+          <p><strong>Description:</strong> {{ range .Alerts }}{{ .Annotations.description }}<br>{{ end }}</p>
+          <p><strong>Time:</strong> {{ .CommonAnnotations.startsAt }}</p>
+          <p><strong>Action Required:</strong> Review system state and manually re-enable trading after resolution.</p>
+        send_resolved: true
+
+    # Twilio SMS (configure with your Twilio credentials)
+    # webhook_configs:
+    #   - url: 'https://api.twilio.com/2010-04-01/Accounts/YOUR_ACCOUNT_SID/Messages.json'
+    #     http_config:
+    #       basic_auth:
+    #         username: 'YOUR_ACCOUNT_SID'
+    #         password: 'YOUR_AUTH_TOKEN'
+
+  # IBKR connection alerts
+  - name: 'ibkr-alerts'
+    email_configs:
+      - to: 'trading-ops@example.com'
+        headers:
+          Subject: '[IBKR] {{ .GroupLabels.alertname }}'
+        html: |
+          <h2>IBKR Alert: {{ .GroupLabels.alertname }}</h2>
+          <p><strong>Description:</strong> {{ range .Alerts }}{{ .Annotations.description }}<br>{{ end }}</p>
+          <p><strong>Runbook:</strong> {{ .CommonAnnotations.runbook }}</p>
+        send_resolved: true
+
+  # Performance alerts
+  - name: 'performance-alerts'
+    email_configs:
+      - to: 'dev-team@example.com'
+        headers:
+          Subject: '[Performance] {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+  # Quality alerts
+  - name: 'quality-alerts'
+    email_configs:
+      - to: 'data-team@example.com'
+        headers:
+          Subject: '[Data Quality] {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+  # Resource alerts
+  - name: 'resource-alerts'
+    email_configs:
+      - to: 'ops-team@example.com'
+        headers:
+          Subject: '[Resources] {{ .GroupLabels.alertname }}'
+        send_resolved: true
+
+# Templates for notification formatting
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'

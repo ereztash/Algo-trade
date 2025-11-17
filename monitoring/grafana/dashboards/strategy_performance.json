@@ -1,0 +1,332 @@
+{
+  "dashboard": {
+    "title": "Strategy Performance - Algo Trading",
+    "uid": "algo-trade-strategy-performance",
+    "tags": ["algo-trade", "strategy-plane", "performance"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "type": "stat",
+        "title": "Portfolio Value (USD)",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "portfolio_value_usd",
+            "legendFormat": "Portfolio Value"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD",
+            "decimals": 2,
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 100000, "color": "yellow"},
+                {"value": 500000, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "type": "stat",
+        "title": "Daily PnL (USD)",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "portfolio_pnl_usd{period=\"daily\"}",
+            "legendFormat": "Daily PnL"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD",
+            "decimals": 2,
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": -10000, "color": "red"},
+                {"value": 0, "color": "yellow"},
+                {"value": 1000, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "type": "stat",
+        "title": "Sharpe Ratio (Daily)",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "portfolio_sharpe_ratio{period=\"daily\"}",
+            "legendFormat": "Sharpe"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": -1, "color": "red"},
+                {"value": 0.5, "color": "yellow"},
+                {"value": 1.5, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "type": "stat",
+        "title": "Max Drawdown (%)",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "portfolio_max_drawdown_percent",
+            "legendFormat": "Max DD"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 10, "color": "yellow"},
+                {"value": 15, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "type": "graph",
+        "title": "Portfolio Value Over Time",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "portfolio_value_usd",
+            "legendFormat": "Portfolio Value"
+          }
+        ],
+        "yaxes": [
+          {"format": "currencyUSD", "label": "Value (USD)"}
+        ],
+        "fill": 1,
+        "linewidth": 2
+      },
+      {
+        "id": 6,
+        "type": "graph",
+        "title": "Cumulative PnL",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "portfolio_pnl_usd{period=\"total\"}",
+            "legendFormat": "Total PnL"
+          },
+          {
+            "expr": "portfolio_pnl_usd{period=\"daily\"}",
+            "legendFormat": "Daily PnL"
+          }
+        ],
+        "yaxes": [
+          {"format": "currencyUSD", "label": "PnL (USD)"}
+        ],
+        "seriesOverrides": [
+          {
+            "alias": "Total PnL",
+            "yaxis": 1,
+            "fill": 2
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "type": "stat",
+        "title": "Open Positions",
+        "gridPos": {"h": 4, "w": 4, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "portfolio_positions",
+            "legendFormat": "Positions"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "yellow"},
+                {"value": 5, "color": "green"},
+                {"value": 50, "color": "orange"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "type": "stat",
+        "title": "Win Rate (%)",
+        "gridPos": {"h": 4, "w": 4, "x": 4, "y": 12},
+        "targets": [
+          {
+            "expr": "portfolio_win_rate_percent",
+            "legendFormat": "Win Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 50, "color": "yellow"},
+                {"value": 60, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "type": "stat",
+        "title": "Market Regime",
+        "gridPos": {"h": 4, "w": 4, "x": 8, "y": 12},
+        "targets": [
+          {
+            "expr": "market_regime",
+            "legendFormat": "Regime"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 1, "color": "yellow"},
+                {"value": 2, "color": "red"}
+              ]
+            },
+            "mappings": [
+              {"type": "value", "value": "0", "text": "CALM"},
+              {"type": "value", "value": "1", "text": "NORMAL"},
+              {"type": "value", "value": "2", "text": "STORM"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 10,
+        "type": "graph",
+        "title": "Signal Generation Performance (ms)",
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(signal_generation_duration_ms_bucket[5m]))",
+            "legendFormat": "p95 - {{signal_type}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "ms", "label": "Duration"}
+        ]
+      },
+      {
+        "id": 11,
+        "type": "graph",
+        "title": "Portfolio Exposure by Asset Class",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "portfolio_exposure_usd",
+            "legendFormat": "{{asset_class}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "currencyUSD", "label": "Exposure (USD)"}
+        ],
+        "stack": true
+      },
+      {
+        "id": 12,
+        "type": "graph",
+        "title": "Signals Generated (rate)",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(signals_generated_total[5m])",
+            "legendFormat": "{{signal_type}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Signals/sec"}
+        ]
+      },
+      {
+        "id": 13,
+        "type": "table",
+        "title": "Top Positions",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "topk(10, position_value_usd)",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"Time": true},
+              "renameByName": {
+                "symbol": "Symbol",
+                "conid": "Contract ID",
+                "Value": "Position Value (USD)"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "type": "graph",
+        "title": "Optimization Duration (p95)",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(optimization_duration_ms_bucket[5m]))",
+            "legendFormat": "{{optimizer}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "ms", "label": "Duration"}
+        ]
+      }
+    ]
+  }
+}

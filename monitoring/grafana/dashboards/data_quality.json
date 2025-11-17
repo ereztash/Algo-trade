@@ -1,0 +1,244 @@
+{
+  "dashboard": {
+    "title": "Data Quality - Algo Trading",
+    "uid": "algo-trade-data-quality",
+    "tags": ["algo-trade", "data-plane", "quality"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "5s",
+    "time": {
+      "from": "now-30m",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "type": "stat",
+        "title": "Data Ingestion Rate (events/sec)",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "sum(rate(data_ingestion_events_total[1m]))",
+            "legendFormat": "Ingestion Rate"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 10, "color": "yellow"},
+                {"value": 50, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "type": "stat",
+        "title": "P95 Latency (ms)",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(data_ingestion_latency_ms_bucket[5m]))",
+            "legendFormat": "P95"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 250, "color": "yellow"},
+                {"value": 500, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "type": "stat",
+        "title": "Data Quality Score",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "avg(data_quality_score)",
+            "legendFormat": "Quality"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "max": 1,
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 0.90, "color": "yellow"},
+                {"value": 0.95, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "type": "stat",
+        "title": "NTP Drift (ms)",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "abs(ntp_time_drift_ms)",
+            "legendFormat": "Drift"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 100, "color": "yellow"},
+                {"value": 250, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "type": "graph",
+        "title": "Data Ingestion Latency (p50, p95, p99)",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(data_ingestion_latency_ms_bucket[5m]))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(data_ingestion_latency_ms_bucket[5m]))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(data_ingestion_latency_ms_bucket[5m]))",
+            "legendFormat": "p99"
+          }
+        ],
+        "yaxes": [
+          {"format": "ms", "label": "Latency"}
+        ],
+        "seriesOverrides": [
+          {"alias": "p99", "color": "red"},
+          {"alias": "p95", "color": "yellow"},
+          {"alias": "p50", "color": "green"}
+        ]
+      },
+      {
+        "id": 6,
+        "type": "graph",
+        "title": "Data Quality Score by Dimension",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "data_quality_score{dimension=\"freshness\"}",
+            "legendFormat": "Freshness"
+          },
+          {
+            "expr": "data_quality_score{dimension=\"completeness\"}",
+            "legendFormat": "Completeness"
+          },
+          {
+            "expr": "data_quality_score{dimension=\"accuracy\"}",
+            "legendFormat": "Accuracy"
+          }
+        ],
+        "yaxes": [
+          {"format": "percentunit", "min": 0, "max": 1}
+        ]
+      },
+      {
+        "id": 7,
+        "type": "graph",
+        "title": "Data Gaps Rate",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(data_gaps_total[5m])",
+            "legendFormat": "{{conid}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Gaps/sec"}
+        ]
+      },
+      {
+        "id": 8,
+        "type": "graph",
+        "title": "Kafka Consumer Lag",
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "kafka_consumer_lag",
+            "legendFormat": "{{topic}}/{{partition}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Messages"}
+        ]
+      },
+      {
+        "id": 9,
+        "type": "graph",
+        "title": "Data Completeness (%)",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 18},
+        "targets": [
+          {
+            "expr": "data_completeness_percent",
+            "legendFormat": "{{conid}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "min": 0, "max": 100}
+        ]
+      },
+      {
+        "id": 10,
+        "type": "graph",
+        "title": "Normalization Error Rate",
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 18},
+        "targets": [
+          {
+            "expr": "rate(data_normalization_errors_total[5m])",
+            "legendFormat": "{{error_type}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Errors/sec"}
+        ]
+      },
+      {
+        "id": 11,
+        "type": "heatmap",
+        "title": "Ingestion Latency Heatmap",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "sum(rate(data_ingestion_latency_ms_bucket[5m])) by (le)",
+            "format": "heatmap",
+            "legendFormat": "{{le}}"
+          }
+        ],
+        "dataFormat": "tsbuckets"
+      }
+    ]
+  }
+}
