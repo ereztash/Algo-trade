@@ -49,9 +49,19 @@
 - **Data Plane**: קליטת נתונים, נורמליזציה, QA
 - **Strategy Plane**: בניית אסטרטגיה, אופטימיזציה
 - **Order Plane**: ביצוע הזמנות, risk checks, למידה
-- **Kafka Message Bus** לתקשורת בין מישורים
+- **Kafka Message Bus** - ⭐ **חדש!** תקשורת אסינכרונית מבוזרת מלאה
 - **Message Contracts & Schema Validation** - ⭐ **חדש!** אימות מלא של הודעות Kafka
 - **Prometheus + Grafana** למעקב ביצועים
+
+### ✅ Kafka Message Bus Integration - אינטגרציה מלאה
+- **Async Producer/Consumer** עם aiokafka - תקשורת אסינכרונית מלאה
+- **5 Kafka Topics**: market_raw, market_events, ofi_events, order_intents, exec_reports
+- **Automatic Topic Creation** - יצירה אוטומטית של topics בהתאם ל-retention policies
+- **Message Validation** - אינטגרציה מלאה עם validators בכל מישור
+- **Dead Letter Queue (DLQ)** - routing אוטומטי של הודעות לא תקינות
+- **Docker Compose** - Kafka cluster מקומי לפיתוח
+- **Health Check Utility** - בדיקת תקינות Kafka
+- **מערכת יכולה לרוץ במתווה distributed מלא!** 🚀
 
 ### ✅ חוזי הודעות ואימות סכמה (Message Contracts)
 - **5 סוגי הודעות** מאומתות: BarEvent, TickEvent, OFIEvent, OrderIntent, ExecutionReport
@@ -69,6 +79,7 @@
 ### דרישות מקדימות
 ```bash
 Python 3.9+
+Docker & Docker Compose (להרצת Kafka)
 Interactive Brokers TWS/Gateway (לחיבור אמיתי)
 ```
 
@@ -80,14 +91,36 @@ cd Algo-trade
 
 # Install dependencies
 pip install -r requirements.txt
-
-# טען תצורה (יווצר אוטומטית אם לא קיים)
-python algo_trade/core/main.py
 ```
 
-### הרצה (Backtest)
+### הרצת Kafka Message Bus (Development)
 ```bash
-# הרץ backtest מלא עם נתונים סינתטיים
+# התחל Kafka cluster מקומי
+docker-compose -f docker-compose.kafka.yml up -d
+
+# בדוק תקינות Kafka
+python scripts/kafka_health_check.py
+
+# גש ל-Kafka UI (אופציונלי)
+# http://localhost:8080
+```
+
+### הרצת המערכת (Async Distributed Mode)
+```bash
+# הרץ את כל 3 המישורים עם Kafka Message Bus
+python data_plane/app/main.py
+```
+
+הפלט המצופה:
+```
+🚀 Data Plane: Produces to market_events, ofi_events
+🚀 Strategy Plane: Consumes market_events → Produces order_intents
+🚀 Order Plane: Consumes order_intents → Produces exec_reports
+```
+
+### הרצה (Backtest - Legacy)
+```bash
+# הרץ backtest מלא עם נתונים סינתטיים (ללא Kafka)
 python algo_trade/core/main.py
 ```
 
@@ -175,16 +208,22 @@ Algo-trade/
 | ✅ Portfolio Optimization | 100% | QP, HRP, Black-Litterman |
 | ✅ Risk Management | 100% | Kill-Switches, Regime Detection |
 | ✅ Validation Framework | 100% | CSCV, PSR, DSR, Bayesian Opt |
-| ✅ **Message Contracts & Schema Validation** | **100%** | **⭐ חדש! 5 סוגי הודעות, DLQ, 18 tests** |
+| ✅ **Message Contracts & Schema Validation** | **100%** | **⭐ 5 סוגי הודעות, DLQ, 18 tests** |
+| ✅ **Kafka Message Bus Integration** | **100%** | **⭐ חדש! Full async distributed architecture** |
 | 🟡 IBKR Integration | 70% | Handler בסיסי, דרושה השלמה |
-| 🟡 3-Plane Architecture | 75% | שלד + Validation, דרושה אינטגרציה |
+| ✅ 3-Plane Architecture | 100% | **⭐ Kafka integration מושלם!** |
 | 🟡 Testing Suite | 25% | Schema validation tests הושלמו |
-| 🔴 Docker & Deployment | 0% | טרם הושלם |
+| 🟡 Docker & Deployment | 50% | **⭐ Kafka Docker Compose מוכן** |
 | 🟡 Monitoring | 40% | Metrics Exporter קיים |
 
 **🎯 עד Production:** 10-14 שבועות (ראה מסמך מנהלים)
 
 ### עדכונים אחרונים (נובמבר 2025):
+- ✅ **Kafka Message Bus Integration** - תקשורת אסינכרונית מבוזרת מלאה בין המישורים
+- ✅ **Async Producer/Consumer** - KafkaAdapter מלא עם aiokafka
+- ✅ **Validator Integration** - אינטגרציה מלאה ב-Data/Strategy/Order Planes
+- ✅ **Docker Compose** - Kafka cluster מקומי לפיתוח
+- ✅ **Health Check Utility** - בדיקת תקינות Kafka
 - ✅ **Message Contracts & Schema Validation** - מערכת אימות מקיפה עם Pydantic v2 ו-JSON Schema
 - ✅ **18 Unit Tests** מכסים כל תרחישי האימות
 - ✅ **DLQ Integration** להודעות לא תקינות
@@ -232,10 +271,11 @@ Algo-trade/
 
 ---
 
-**עודכן לאחרונה:** 16 נובמבר 2025
+**עודכן לאחרונה:** 17 נובמבר 2025
 
 ---
 
 ## 📚 תיעוד נוסף
 
+- **[Kafka Message Bus Integration](./KAFKA_INTEGRATION.md)** - ⭐ **חדש!** מדריך מלא לאינטגרציית Kafka
 - **[Message Contracts & Schema Validation](./contracts/README.md)** - מדריך מקיף לשימוש במערכת האימות
