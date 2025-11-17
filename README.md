@@ -51,8 +51,9 @@
 - **Purged K-Fold Cross-Validation** למניעת data leakage
 - **CSCV** לזיהוי overfitting
 - **PSR & DSR** להערכת מובהקות סטטיסטית
-- **Bayesian Optimization** לכיוונון היפר-פרמטרים
+- **Bayesian Optimization** לכיוונון היפר-פרמטרים (Optuna)
 - **LinUCB Contextual Bandit** לבחירה אדפטיבית של אותות
+- **Sensitivity Analysis Framework** - ⭐ **חדש!** ניתוח רגישות היפר-פרמטרים
 
 ### 🏗️ ארכיטקטורה
 - **Data Plane**: קליטת נתונים, נורמליזציה, QA
