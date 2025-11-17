@@ -27,10 +27,14 @@ jobs:
       - name: Run chaos tests
         id: chaos
         run: |
+          mkdir -p reports/chaos
           pytest tests/chaos/ -v \
+            -m chaos \
             --tb=short \
             --timeout=600 \
             --junitxml=reports/chaos/junit-chaos.xml \
+            --html=reports/chaos/chaos-report.html \
+            --self-contained-html \
             || echo "chaos_failed=true" >> $GITHUB_OUTPUT
         continue-on-error: true
 
@@ -57,17 +61,39 @@ jobs:
           - **Status:** ${{ steps.chaos.outcome }}
 
           ## Chaos Scenarios Tested
-          1. Network disconnect (3s, 10s, 30s)
-          2. High latency injection (500ms, 2s, 5s)
-          3. Memory pressure simulation
-          4. CPU saturation tests
-          5. Message loss scenarios (5%, 20%)
-          6. Cascading failure tests
+
+          ### Network Chaos
+          1. Network disconnect (3s, 10s, 30s partitions)
+          2. High latency injection (100ms, 500ms, 2s, 5s)
+          3. Packet loss (5%, 20%, 50%)
+          4. Combined network faults
+
+          ### IBKR Resilience
+          1. Connection failures and recovery
+          2. Order placement during failures
+          3. Timeout handling
+          4. Rate limit violations
+          5. Streaming data resilience
+
+          ### Component Failures
+          1. Kafka broker shutdown
+          2. Producer/consumer timeouts
+          3. Consumer lag recovery
+          4. Orchestrator restart
+          5. Cascading failures (IBKR + Kafka)
+
+          ### Recovery Validation
+          1. RTO compliance (≤30s)
+          2. State consistency
+          3. Order replay
+          4. Position reconciliation
+          5. Graceful shutdown/restart
 
           ## Recovery Metrics
-          - **Target Recovery Time:** ≤30 seconds
-          - **Actual Recovery Time:** TBD (tests in development)
-          - **Pass/Fail:** Pending full implementation
+          - **Target Recovery Time (RTO):** ≤30 seconds
+          - **Data Loss Tolerance:** ≤5%
+          - **Order Integrity:** 100% (no duplicates or losses)
+          - **Position Accuracy:** 100% (after reconciliation)
 
           ## Recommendations
           - Continue monitoring system resilience
