@@ -1,0 +1,351 @@
+# Resilience and Chaos Engineering Configuration
+#
+# Defines recovery policies, timeouts, retry strategies, and circuit breakers
+# for production deployment.
+
+# Recovery Time Objectives (RTO)
+rto:
+  target_seconds: 30  # Maximum acceptable recovery time
+  detection_target_seconds: 5  # Maximum time to detect failure
+
+  # Per-component RTO targets
+  components:
+    ibkr_market_connection: 20  # IBKR market data connection recovery
+    ibkr_exec_connection: 15    # IBKR execution connection recovery (more critical)
+    kafka_broker: 10             # Kafka broker recovery
+    orchestrator: 5              # Orchestrator restart
+
+# Connection Management
+connections:
+  ibkr:
+    # Connection timeouts
+    connect_timeout_s: 10
+    request_timeout_s: 5
+    stream_timeout_s: 30
+
+    # Reconnection strategy
+    reconnect:
+      max_attempts: 5
+      base_delay_s: 1.0
+      max_delay_s: 30.0
+      backoff_strategy: exponential  # exponential, linear, fixed
+      jitter: true  # Add jitter to prevent thundering herd
+
+    # Health checks
+    health_check:
+      enabled: true
+      interval_s: 10
+      timeout_s: 3
+      failure_threshold: 3  # Consecutive failures before marked unhealthy
+
+    # Connection pooling
+    pool:
+      min_connections: 1
+      max_connections: 5
+      connection_lifetime_s: 3600  # Recycle connections after 1 hour
+
+  kafka:
+    # Kafka timeouts
+    producer:
+      request_timeout_ms: 5000
+      linger_ms: 100
+      retry_backoff_ms: 100
+
+    consumer:
+      session_timeout_ms: 10000
+      heartbeat_interval_ms: 3000
+      max_poll_interval_ms: 300000
+
+    # Reconnection
+    reconnect:
+      max_attempts: 10
+      base_delay_s: 0.5
+      max_delay_s: 60.0
+      backoff_strategy: exponential
+
+# Retry Policies
+retry:
+  # Default retry policy
+  default:
+    max_attempts: 3
+    base_delay_s: 1.0
+    max_delay_s: 30.0
+    backoff_strategy: exponential
+    jitter: true
+
+  # Operation-specific retry policies
+  operations:
+    # Order placement is critical - aggressive retry
+    place_order:
+      max_attempts: 5
+      base_delay_s: 0.5
+      max_delay_s: 10.0
+      backoff_strategy: exponential
+      idempotent: true  # Safe to retry with same order_id
+
+    # Market data less critical - fewer retries
+    request_market_data:
+      max_attempts: 3
+      base_delay_s: 1.0
+      max_delay_s: 5.0
+      backoff_strategy: linear
+      idempotent: true
+
+    # Kafka produce
+    kafka_produce:
+      max_attempts: 3
+      base_delay_s: 0.1
+      max_delay_s: 1.0
+      backoff_strategy: exponential
+      idempotent: true  # With proper message keys
+
+  # Retryable errors
+  retryable_errors:
+    - ConnectionError
+    - TimeoutError
+    - TemporaryNetworkError
+    - RateLimitError
+    - ServiceUnavailableError
+
+  # Non-retryable errors
+  non_retryable_errors:
+    - AuthenticationError
+    - PermissionError
+    - InvalidRequestError
+    - OrderRejectedError
+
+# Circuit Breakers
+circuit_breakers:
+  # Global circuit breaker settings
+  default:
+    enabled: true
+    failure_threshold: 5  # Open circuit after N failures
+    success_threshold: 2  # Close circuit after N successes
+    timeout_s: 60         # Try again after timeout
+    half_open_max_calls: 1  # Max calls in half-open state
+
+  # Component-specific circuit breakers
+  components:
+    ibkr_market:
+      enabled: true
+      failure_threshold: 10  # More tolerant for market data
+      success_threshold: 3
+      timeout_s: 30
+
+    ibkr_exec:
+      enabled: true
+      failure_threshold: 3  # Less tolerant for execution
+      success_threshold: 5
+      timeout_s: 60
+
+    kafka_producer:
+      enabled: true
+      failure_threshold: 5
+      success_threshold: 2
+      timeout_s: 30
+
+# Rate Limiting
+rate_limits:
+  ibkr:
+    # IBKR pacing limits (from their API documentation)
+    market_data:
+      requests_per_second: 50
+      burst: 100
+
+    historical_data:
+      requests_per_second: 1
+      requests_per_minute: 60
+
+    orders:
+      requests_per_second: 50
+      requests_per_minute: 2000
+
+  # Internal rate limits
+  internal:
+    order_intent_per_second: 100
+    signal_updates_per_second: 1000
+
+# Bulkhead Isolation
+bulkheads:
+  # Resource limits per component to prevent cascading failures
+  data_plane:
+    max_concurrent_requests: 100
+    max_queue_size: 1000
+    timeout_s: 30
+
+  strategy_plane:
+    max_concurrent_computations: 10
+    max_queue_size: 100
+    timeout_s: 60
+
+  order_plane:
+    max_concurrent_orders: 50
+    max_queue_size: 500
+    timeout_s: 10
+
+# Graceful Degradation
+degradation:
+  # Fallback modes when components fail
+  modes:
+    # When market data fails
+    market_data_failure:
+      strategy: halt_new_signals  # Stop generating new signals
+      maintain_positions: true    # Keep existing positions
+      emergency_close: false      # Don't panic close
+
+    # When order execution fails
+    order_execution_failure:
+      strategy: buffer_orders     # Buffer orders locally
+      buffer_max_size: 1000
+      buffer_timeout_s: 300       # Fail after 5 minutes
+      alert: true
+
+    # When Kafka fails
+    kafka_failure:
+      strategy: local_buffer      # Buffer messages locally
+      buffer_max_size_mb: 100
+      flush_on_recovery: true
+      persist_to_disk: true
+
+  # Partial degradation thresholds
+  partial_degradation:
+    # If data loss exceeds threshold, enter degraded mode
+    data_loss_threshold: 0.10  # 10%
+
+    # If latency exceeds threshold, throttle operations
+    latency_threshold_ms: 1000
+    throttle_factor: 0.5  # Reduce rate by 50%
+
+# Health Monitoring
+health:
+  # Health check configuration
+  endpoints:
+    enabled: true
+    port: 8080
+    path: /health
+
+  checks:
+    # Critical checks (system unhealthy if any fail)
+    critical:
+      - ibkr_exec_connection
+      - kafka_broker
+      - kill_switch_active
+
+    # Non-critical checks (warnings only)
+    non_critical:
+      - ibkr_market_connection
+      - consumer_lag
+      - disk_space
+
+  # Health check intervals
+  intervals:
+    critical_checks_s: 5
+    non_critical_checks_s: 30
+
+  # Alerting
+  alerts:
+    enabled: true
+    channels:
+      - log
+      - metrics
+      # - email  # Configure in production
+      # - pagerduty  # Configure in production
+
+# Data Consistency
+consistency:
+  # Message ordering guarantees
+  message_ordering:
+    enabled: true
+    per_partition: true  # Kafka partition ordering
+    sequence_validation: true
+
+  # Idempotency
+  idempotency:
+    enabled: true
+    dedupe_window_s: 300  # 5 minute deduplication window
+
+  # Reconciliation
+  reconciliation:
+    enabled: true
+    interval_s: 300  # Every 5 minutes
+
+    checks:
+      - position_reconciliation  # Verify positions match broker
+      - order_status_reconciliation  # Verify order states
+      - balance_reconciliation  # Verify account balance
+
+# Chaos Testing
+chaos_testing:
+  # Production chaos testing settings
+  enabled_in_production: false  # Enable for controlled chaos in prod
+
+  # Allowed chaos scenarios in production
+  prod_scenarios:
+    - connection_latency  # Safe to test
+    - minor_packet_loss   # < 5% loss
+
+  # Forbidden in production
+  prod_forbidden:
+    - full_disconnects
+    - component_crashes
+    - data_corruption
+
+  # Chaos testing schedule
+  schedule:
+    enabled: false  # Enable for automated chaos testing
+    frequency: weekly
+    day: saturday
+    hour: 2  # 2 AM
+    duration_minutes: 60
+
+  # Safety limits for chaos tests
+  safety:
+    max_rto_tolerance_s: 30  # Must meet RTO
+    max_data_loss: 0.05      # Max 5% data loss
+    auto_abort_on_violation: true
+
+# Metrics and Observability
+metrics:
+  # Recovery metrics
+  track_recovery_time: true
+  track_failure_count: true
+  track_retry_count: true
+
+  # Percentiles to track
+  percentiles:
+    - 50  # p50 (median)
+    - 95  # p95
+    - 99  # p99
+    - 99.9  # p999
+
+  # Metric retention
+  retention_days: 90
+
+  # Export
+  export:
+    enabled: true
+    format: prometheus
+    interval_s: 10
+
+# Emergency Procedures
+emergency:
+  # Kill switch conditions
+  kill_switch:
+    triggers:
+      - pnl_threshold_exceeded
+      - max_drawdown_exceeded
+      - position_limit_exceeded
+      - rto_violation_repeated
+      - cascading_failures
+
+    actions:
+      - stop_new_orders
+      - cancel_working_orders
+      - close_positions  # Configurable
+      - alert_operators
+
+  # Emergency contacts
+  contacts:
+    primary: ops-team@example.com
+    secondary: dev-team@example.com
+    emergency: cto@example.com
