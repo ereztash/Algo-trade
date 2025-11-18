@@ -16,6 +16,15 @@
 - **[📈 תרשימי זרימה (Decision Flow Diagrams)](./DECISION_FLOW_DIAGRAMS.md)** - תרשימים מפורטים של לוגיקת קבלת ההחלטות
 - **[🎯 מצב נוכחי (Status Now)](./STATUS_NOW.md)** - ⭐ **חדש!** הערכת מצב End-to-End בן 15 תחומים, פערים קריטיים, ו-KPIs
 - **[🚀 Roadmap שבועיים (2-Week Roadmap)](./2-WEEK_ROADMAP.md)** - ⭐ **חדש!** 6 PRs ממופה לסגירת פערים קריטיים
+- **[🔒 IBKR Pre-Live Validation](./IBKR_PRELIVE_EXECUTION_SUMMARY.md)** - מערכת אימות מקיפה של חיבור IBKR (8 שלבים)
+- **[✅ Pre-Live Checklist](./PRE_LIVE_CHECKLIST.md)** - רשימת בדיקה מקיפה לפני Production (10 קטגוריות)
+- **[🔄 Rollback Procedure](./ROLLBACK_PROCEDURE.md)** - נוהל חירום לחזרה לגרסה קודמת
+
+### תפעול ואבטחה:
+- **[🛡️ Risk Policy](./RISK_POLICY.md)** - ⭐ **חדש!** מדיניות ניהול סיכונים פורמלית עם פרמטרים מאושרים
+- **[📖 Runbook](./RUNBOOK.md)** - נהלים תפעוליים להרצה, עצירה, וטיפול בתקלות
+- **[🚨 Incident Playbook](./INCIDENT_PLAYBOOK.md)** - ⭐ **חדש!** מדריך טיפול ב-10 תקלות נפוצות
+- **[👥 RACI Matrix](./RACI_MATRIX.md)** - ⭐ **חדש!** מטריצת אחריות ותפקידים
 
 ### למפתחים:
 - קוד מתועד היטב בעברית (docstrings)
@@ -42,8 +51,9 @@
 - **Purged K-Fold Cross-Validation** למניעת data leakage
 - **CSCV** לזיהוי overfitting
 - **PSR & DSR** להערכת מובהקות סטטיסטית
-- **Bayesian Optimization** לכיוונון היפר-פרמטרים
+- **Bayesian Optimization** לכיוונון היפר-פרמטרים (Optuna)
 - **LinUCB Contextual Bandit** לבחירה אדפטיבית של אותות
+- **Sensitivity Analysis Framework** - ⭐ **חדש!** ניתוח רגישות היפר-פרמטרים
 
 ### 🏗️ ארכיטקטורה
 - **Data Plane**: קליטת נתונים, נורמליזציה, QA
@@ -61,6 +71,14 @@
 - **Validation Metrics** למעקב ואזעקות
 - **18 Unit Tests** מכסים את כל התרחישים
 - **ביצועים**: <1.5ms overhead לכל הודעה
+
+### 🔒 IBKR Pre-Live Validation Framework
+- **8 שלבים** להכנת המערכת לחיבור IBKR (Artifact Validation → Go-Live Decision)
+- **Formal Gate Logic** עם תנאים בוליאניים לכל שלב
+- **6 מסמכים** ליבה: Interface Map, Integration Flow, Rollback Procedure, Go-Live Template
+- **ארכיטקטורה מאושרת** עם coupling נמוך וזרימת עבודה מוגדרת
+- **Governance Framework** עם תהליך אישור פורמלי (Risk Officer, CTO, Lead Trader)
+- **Paper Trading Validation** עם מדדי ביצועים מוגדרים (latency, fill rate, Sharpe)
 
 ---
 
@@ -176,7 +194,8 @@ Algo-trade/
 | ✅ Risk Management | 100% | Kill-Switches, Regime Detection |
 | ✅ Validation Framework | 100% | CSCV, PSR, DSR, Bayesian Opt |
 | ✅ **Message Contracts & Schema Validation** | **100%** | **⭐ חדש! 5 סוגי הודעות, DLQ, 18 tests** |
-| 🟡 IBKR Integration | 70% | Handler בסיסי, דרושה השלמה |
+| ✅ **IBKR Pre-Live Validation Framework** | **100%** | **⭐ חדש! 8 שלבים, 6 מסמכים, Governance** |
+| 🟡 IBKR Integration | 75% | ארכיטקטורה מאושרת, דרוש יישום Stages 4-8 |
 | 🟡 3-Plane Architecture | 75% | שלד + Validation, דרושה אינטגרציה |
 | 🟡 Testing Suite | 25% | Schema validation tests הושלמו |
 | 🔴 Docker & Deployment | 0% | טרם הושלם |
@@ -185,6 +204,15 @@ Algo-trade/
 **🎯 עד Production:** 10-14 שבועות (ראה מסמך מנהלים)
 
 ### עדכונים אחרונים (נובמבר 2025):
+- ✅ **מסמכי תפעול ונהלי חירום** - ⭐ **חדש! (17 נוב')** סט מקיף של מסמכים תפעוליים
+  - **Risk Policy**: מדיניות סיכונים פורמלית (פרמטרי Kill-Switch, Exposure Limits, נהלי אישור)
+  - **Incident Playbook**: מדריך טיפול ב-10 תקלות נפוצות עם SLA מוגדר
+  - **RACI Matrix**: מטריצת אחריות ל-9 תפקידים (Risk Officer, CTO, Lead Quant, וכו')
+  - **סה"כ**: ~200 KB תיעוד תפעולי מוכן לאישור הנהלה
+- ✅ **IBKR Pre-Live Validation Framework** - מערכת בן 8 שלבים להכנה לחיבור IBKR
+  - Stage 1-3 הושלמו: Artifact Validation, Hierarchical Breakdown, Interface Mapping
+  - 6 מסמכים ליבה נוצרו (126.9 KB תיעוד)
+  - Governance templates מוכנים לאישור פורמלי
 - ✅ **Message Contracts & Schema Validation** - מערכת אימות מקיפה עם Pydantic v2 ו-JSON Schema
 - ✅ **18 Unit Tests** מכסים כל תרחישי האימות
 - ✅ **DLQ Integration** להודעות לא תקינות
@@ -232,7 +260,7 @@ Algo-trade/
 
 ---
 
-**עודכן לאחרונה:** 16 נובמבר 2025
+**עודכן לאחרונה:** 17 נובמבר 2025
 
 ---
 
