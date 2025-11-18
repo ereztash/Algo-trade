@@ -1,0 +1,250 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IBKR Paper Account Configuration",
+  "description": "Paper account metadata captured during Stage 6 Account Probe (READ-ONLY)",
+  "type": "object",
+  "required": [
+    "timestamp",
+    "account_id",
+    "account_type",
+    "nav",
+    "cash",
+    "buying_power",
+    "margin_cushion",
+    "permissions",
+    "assets",
+    "limits"
+  ],
+  "properties": {
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Account config probe timestamp (UTC ISO8601)",
+      "example": "2025-11-17T10:00:00Z"
+    },
+    "account_id": {
+      "type": "string",
+      "description": "IBKR Paper account ID (DU prefix)",
+      "pattern": "^DU[0-9]{7,10}$",
+      "example": "DU1234567"
+    },
+    "account_type": {
+      "type": "string",
+      "enum": ["PAPER", "LIVE"],
+      "description": "Account type (MUST be PAPER for pre-live validation)",
+      "default": "PAPER"
+    },
+    "nav": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Net Asset Value (NetLiquidation)",
+      "example": 100000.0
+    },
+    "cash": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Available cash (TotalCashValue)",
+      "example": 100000.0
+    },
+    "buying_power": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Total buying power (includes margin)",
+      "example": 400000.0
+    },
+    "margin_cushion": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Margin cushion ratio (Cushion)",
+      "example": 1.0
+    },
+    "maintenance_margin": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Maintenance margin requirement",
+      "example": 0.0
+    },
+    "equity_with_loan": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Equity with loan value",
+      "example": 100000.0
+    },
+    "permissions": {
+      "type": "object",
+      "description": "Trading permissions enabled for account",
+      "required": ["stocks", "options", "futures"],
+      "properties": {
+        "stocks": {
+          "type": "boolean",
+          "description": "Stocks trading enabled",
+          "default": true
+        },
+        "options": {
+          "type": "boolean",
+          "description": "Options trading enabled",
+          "default": false
+        },
+        "futures": {
+          "type": "boolean",
+          "description": "Futures trading enabled",
+          "default": false
+        },
+        "forex": {
+          "type": "boolean",
+          "description": "Forex trading enabled",
+          "default": false
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["STOCKS", "OPTIONS", "FUTURES", "FOREX", "BONDS"]
+      },
+      "description": "Allowed asset types",
+      "example": ["STOCKS"]
+    },
+    "limits": {
+      "type": "object",
+      "description": "Account trading limits",
+      "required": ["max_order_size", "max_position_value"],
+      "properties": {
+        "max_order_size": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum order size (shares)",
+          "example": 10000
+        },
+        "max_position_value": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum position value ($)",
+          "example": 50000
+        },
+        "max_daily_trades": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum daily trades (for PDT rule)",
+          "example": 1000
+        }
+      }
+    },
+    "positions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "symbol": {"type": "string"},
+          "quantity": {"type": "number"},
+          "avg_cost": {"type": "number"},
+          "market_value": {"type": "number"},
+          "unrealized_pnl": {"type": "number"},
+          "realized_pnl": {"type": "number"}
+        }
+      },
+      "description": "Current positions (if any)",
+      "default": []
+    },
+    "connection_metadata": {
+      "type": "object",
+      "description": "Connection metadata for audit trail",
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "IBKR Gateway host",
+          "default": "127.0.0.1"
+        },
+        "port": {
+          "type": "integer",
+          "description": "IBKR Gateway port (4002 for paper)",
+          "enum": [4001, 4002, 7496, 7497],
+          "default": 4002
+        },
+        "client_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32,
+          "description": "Client ID used for connection",
+          "default": 1
+        },
+        "connection_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Connection timestamp"
+        },
+        "latency_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Connection latency (ms)",
+          "example": 45
+        }
+      }
+    },
+    "validation_status": {
+      "type": "object",
+      "description": "Validation results from Stage 6",
+      "properties": {
+        "connection_successful": {
+          "type": "boolean",
+          "description": "Connection established successfully"
+        },
+        "account_metadata_retrieved": {
+          "type": "boolean",
+          "description": "Account metadata retrieved successfully"
+        },
+        "permission_mismatch": {
+          "type": "boolean",
+          "description": "Permission mismatch detected (if true, HALT)"
+        },
+        "anomalies": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "List of anomalies detected",
+          "default": []
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "timestamp": "2025-11-17T10:00:00Z",
+      "account_id": "DU1234567",
+      "account_type": "PAPER",
+      "nav": 100000.0,
+      "cash": 100000.0,
+      "buying_power": 400000.0,
+      "margin_cushion": 1.0,
+      "maintenance_margin": 0.0,
+      "equity_with_loan": 100000.0,
+      "permissions": {
+        "stocks": true,
+        "options": false,
+        "futures": false,
+        "forex": false
+      },
+      "assets": ["STOCKS"],
+      "limits": {
+        "max_order_size": 10000,
+        "max_position_value": 50000,
+        "max_daily_trades": 1000
+      },
+      "positions": [],
+      "connection_metadata": {
+        "host": "127.0.0.1",
+        "port": 4002,
+        "client_id": 1,
+        "connection_time": "2025-11-17T10:00:00Z",
+        "latency_ms": 45
+      },
+      "validation_status": {
+        "connection_successful": true,
+        "account_metadata_retrieved": true,
+        "permission_mismatch": false,
+        "anomalies": []
+      }
+    }
+  ]
+}

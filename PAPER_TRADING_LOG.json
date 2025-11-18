@@ -1,0 +1,432 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Paper Trading Session Log",
+  "description": "Trade-by-trade session logs captured during Stage 7 Paper Trading Validation",
+  "type": "object",
+  "required": [
+    "session_id",
+    "start_time",
+    "end_time",
+    "account_id",
+    "trades",
+    "session_metadata",
+    "session_summary"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "Unique session identifier",
+      "pattern": "^paper_[0-9]{8}_[0-9]{3}$",
+      "example": "paper_20251117_001"
+    },
+    "start_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Session start timestamp (UTC ISO8601)",
+      "example": "2025-11-17T09:30:00Z"
+    },
+    "end_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Session end timestamp (UTC ISO8601)",
+      "example": "2025-11-17T15:30:00Z"
+    },
+    "account_id": {
+      "type": "string",
+      "description": "IBKR Paper account ID",
+      "pattern": "^DU[0-9]{7,10}$",
+      "example": "DU1234567"
+    },
+    "trades": {
+      "type": "array",
+      "description": "Trade-by-trade execution log",
+      "items": {
+        "type": "object",
+        "required": [
+          "intent_id",
+          "order_id",
+          "symbol",
+          "direction",
+          "quantity",
+          "order_type",
+          "status",
+          "latency_ms"
+        ],
+        "properties": {
+          "intent_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Order intent UUID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "order_id": {
+            "type": "string",
+            "description": "Broker order ID",
+            "example": "1001"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "Ticker symbol",
+            "example": "AAPL"
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["BUY", "SELL"],
+            "description": "Order direction"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Order quantity (shares)",
+            "example": 100
+          },
+          "order_type": {
+            "type": "string",
+            "enum": ["MARKET", "LIMIT", "STOP", "STOP_LIMIT", "ADAPTIVE"],
+            "description": "Order type"
+          },
+          "limit_price": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Limit price (if LIMIT order)",
+            "example": 245.50
+          },
+          "status": {
+            "type": "string",
+            "enum": ["SUBMITTED", "ACKNOWLEDGED", "PARTIAL_FILL", "FILLED", "CANCELED", "REJECTED"],
+            "description": "Final order status"
+          },
+          "latency_ms": {
+            "type": "object",
+            "description": "Latency breakdown (milliseconds)",
+            "required": ["intent_to_submit", "submit_to_ack", "ack_to_fill", "total"],
+            "properties": {
+              "intent_to_submit": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Intent generation to order submission (target: <50ms)",
+                "example": 25
+              },
+              "submit_to_ack": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Submission to broker acknowledgment (target: <150ms)",
+                "example": 120
+              },
+              "ack_to_fill": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Acknowledgment to fill (target: <5000ms)",
+                "example": 3500
+              },
+              "total": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Total intent-to-fill latency",
+                "example": 3645
+              }
+            }
+          },
+          "fill_price": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Actual fill price",
+            "example": 245.52
+          },
+          "commission": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Commission charged",
+            "example": 1.50
+          },
+          "slippage": {
+            "type": "number",
+            "description": "Slippage from limit price (basis points)",
+            "example": 8.2
+          },
+          "timestamp_intent": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Intent timestamp"
+          },
+          "timestamp_submitted": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Submission timestamp"
+          },
+          "timestamp_acknowledged": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Acknowledgment timestamp"
+          },
+          "timestamp_filled": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fill timestamp"
+          },
+          "error_code": {
+            "type": "integer",
+            "description": "IBKR error code (if rejected)",
+            "example": 201
+          },
+          "error_message": {
+            "type": "string",
+            "description": "Error message (if rejected)",
+            "example": "Order rejected: insufficient funds"
+          }
+        }
+      }
+    },
+    "session_metadata": {
+      "type": "object",
+      "description": "Session configuration and metadata",
+      "properties": {
+        "duration_hours": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Session duration (hours)",
+          "example": 6.0
+        },
+        "strategy": {
+          "type": "string",
+          "description": "Strategy name",
+          "example": "QuantPortfolioStrategy"
+        },
+        "symbols": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Symbols traded",
+          "example": ["AAPL", "MSFT", "TSLA", "GOOGL", "AMZN"]
+        },
+        "target_trades": {
+          "type": "object",
+          "properties": {
+            "min": {"type": "integer", "example": 50},
+            "max": {"type": "integer", "example": 200}
+          }
+        },
+        "initial_capital": {
+          "type": "number",
+          "description": "Initial capital ($)",
+          "example": 100000.0
+        },
+        "branch": {
+          "type": "string",
+          "description": "Git branch",
+          "example": "claude/create-missing-artifacts-01BMc3EANENm9GuU6ZZV1Whq"
+        },
+        "commit_hash": {
+          "type": "string",
+          "description": "Git commit hash",
+          "example": "97a30b9"
+        }
+      }
+    },
+    "session_summary": {
+      "type": "object",
+      "description": "Session performance summary",
+      "required": [
+        "total_trades",
+        "filled_trades",
+        "rejected_trades",
+        "canceled_trades",
+        "fill_rate",
+        "avg_latency_ms",
+        "pacing_violations",
+        "disconnects"
+      ],
+      "properties": {
+        "total_trades": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total trades attempted",
+          "example": 127
+        },
+        "filled_trades": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Trades filled",
+          "example": 126
+        },
+        "rejected_trades": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Trades rejected",
+          "example": 0
+        },
+        "canceled_trades": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Trades canceled",
+          "example": 1
+        },
+        "fill_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Fill rate ratio (target: >0.98)",
+          "example": 0.992
+        },
+        "avg_latency_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average total latency (ms)",
+          "example": 3645
+        },
+        "p50_latency_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "P50 latency (ms)",
+          "example": 180
+        },
+        "p95_latency_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "P95 latency (ms)",
+          "example": 320
+        },
+        "p99_latency_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "P99 latency (ms)",
+          "example": 580
+        },
+        "pacing_violations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Pacing violations count (target: 0)",
+          "example": 0
+        },
+        "disconnects": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Connection disconnects (target: 0)",
+          "example": 0
+        },
+        "total_pnl": {
+          "type": "number",
+          "description": "Total session P&L ($)",
+          "example": 1250.50
+        },
+        "sharpe_ratio": {
+          "type": "number",
+          "description": "Sharpe ratio (annualized)",
+          "example": 1.25
+        },
+        "max_drawdown": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Maximum drawdown ratio",
+          "example": 0.08
+        },
+        "final_capital": {
+          "type": "number",
+          "description": "Final capital ($)",
+          "example": 101250.50
+        }
+      }
+    },
+    "anomalies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "timestamp": {"type": "string", "format": "date-time"},
+          "severity": {"type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"]},
+          "category": {"type": "string", "enum": ["LATENCY", "PACING", "CONNECTION", "REJECTION", "OTHER"]},
+          "description": {"type": "string"},
+          "resolution": {"type": "string"},
+          "resolved": {"type": "boolean"}
+        }
+      },
+      "description": "Anomalies detected during session",
+      "default": []
+    }
+  },
+  "examples": [
+    {
+      "session_id": "paper_20251117_001",
+      "start_time": "2025-11-17T09:30:00Z",
+      "end_time": "2025-11-17T15:30:00Z",
+      "account_id": "DU1234567",
+      "trades": [
+        {
+          "intent_id": "550e8400-e29b-41d4-a716-446655440000",
+          "order_id": "1001",
+          "symbol": "AAPL",
+          "direction": "BUY",
+          "quantity": 100,
+          "order_type": "LIMIT",
+          "limit_price": 245.50,
+          "status": "FILLED",
+          "latency_ms": {
+            "intent_to_submit": 25,
+            "submit_to_ack": 120,
+            "ack_to_fill": 3500,
+            "total": 3645
+          },
+          "fill_price": 245.52,
+          "commission": 1.50,
+          "slippage": 8.2,
+          "timestamp_intent": "2025-11-17T09:30:01.000Z",
+          "timestamp_submitted": "2025-11-17T09:30:01.025Z",
+          "timestamp_acknowledged": "2025-11-17T09:30:01.145Z",
+          "timestamp_filled": "2025-11-17T09:30:04.645Z"
+        },
+        {
+          "intent_id": "660e8400-e29b-41d4-a716-446655440001",
+          "order_id": "1002",
+          "symbol": "MSFT",
+          "direction": "SELL",
+          "quantity": 50,
+          "order_type": "MARKET",
+          "status": "FILLED",
+          "latency_ms": {
+            "intent_to_submit": 22,
+            "submit_to_ack": 110,
+            "ack_to_fill": 2800,
+            "total": 2932
+          },
+          "fill_price": 378.25,
+          "commission": 1.00,
+          "slippage": 5.1,
+          "timestamp_intent": "2025-11-17T09:35:00.000Z",
+          "timestamp_submitted": "2025-11-17T09:35:00.022Z",
+          "timestamp_acknowledged": "2025-11-17T09:35:00.132Z",
+          "timestamp_filled": "2025-11-17T09:35:02.932Z"
+        }
+      ],
+      "session_metadata": {
+        "duration_hours": 6.0,
+        "strategy": "QuantPortfolioStrategy",
+        "symbols": ["AAPL", "MSFT", "TSLA", "GOOGL", "AMZN"],
+        "target_trades": {
+          "min": 50,
+          "max": 200
+        },
+        "initial_capital": 100000.0,
+        "branch": "claude/create-missing-artifacts-01BMc3EANENm9GuU6ZZV1Whq",
+        "commit_hash": "97a30b9"
+      },
+      "session_summary": {
+        "total_trades": 127,
+        "filled_trades": 126,
+        "rejected_trades": 0,
+        "canceled_trades": 1,
+        "fill_rate": 0.992,
+        "avg_latency_ms": 3200,
+        "p50_latency_ms": 180,
+        "p95_latency_ms": 320,
+        "p99_latency_ms": 580,
+        "pacing_violations": 0,
+        "disconnects": 0,
+        "total_pnl": 1250.50,
+        "sharpe_ratio": 1.25,
+        "max_drawdown": 0.08,
+        "final_capital": 101250.50
+      },
+      "anomalies": []
+    }
+  ]
+}

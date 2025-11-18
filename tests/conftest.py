@@ -205,6 +205,9 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "chaos: Chaos engineering tests")
     config.addinivalue_line("markers", "performance: Performance/benchmark tests")
     config.addinivalue_line("markers", "slow: Slow-running tests")
+    config.addinivalue_line("markers", "stage6: Stage 6 - Account Probe (requires IBKR connection)")
+    config.addinivalue_line("markers", "stage7: Stage 7 - Paper Trading (requires Paper account)")
+    config.addinivalue_line("markers", "stage8: Stage 8 - Go-Live Decision (requires all previous stages)")
 
 
 def pytest_collection_modifyitems(config, items):
