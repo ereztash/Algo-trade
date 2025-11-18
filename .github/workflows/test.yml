@@ -67,7 +67,7 @@ jobs:
         run: safety check --json --output safety-report.json || true
 
       - name: Upload security reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: security-reports
@@ -117,14 +117,14 @@ jobs:
           name: codecov-unit-${{ matrix.python-version }}
 
       - name: Archive coverage report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.python-version == '3.9'
         with:
           name: coverage-report
           path: htmlcov/
 
       - name: Archive test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-results-${{ matrix.python-version }}
@@ -155,7 +155,7 @@ jobs:
             --junitxml=junit/property-test-results.xml
 
       - name: Archive property test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: property-test-results
@@ -188,7 +188,7 @@ jobs:
           python scripts/calculate_mr_pass_rate.py || echo "MR calculation script not yet implemented"
 
       - name: Archive metamorphic test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: metamorphic-test-results
@@ -248,7 +248,7 @@ jobs:
             --junitxml=junit/integration-test-results.xml
 
       - name: Archive integration test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: integration-test-results
@@ -278,7 +278,7 @@ jobs:
             --junitxml=junit/e2e-test-results.xml
 
       - name: Archive E2E test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: e2e-test-results
@@ -299,7 +299,7 @@ jobs:
         run: pip install coverage[toml]>=7.3.0
 
       - name: Download all coverage reports
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: coverage-report
           path: htmlcov/

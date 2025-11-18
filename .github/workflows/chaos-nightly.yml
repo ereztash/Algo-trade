@@ -40,7 +40,7 @@ jobs:
           python scripts/generate_chaos_scorecard.py || echo "Scorecard generation skipped (script not yet implemented)"
 
       - name: Archive chaos reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: chaos-reports
@@ -172,7 +172,7 @@ jobs:
           python-version: '3.9'
 
       - name: Download chaos reports
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: chaos-reports
           path: reports/chaos/
